@@ -1,0 +1,483 @@
+"use client"
+
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Slider } from "@/components/ui/slider"
+import {
+  Search,
+  MapPin,
+  Star,
+  Filter,
+  X,
+  SlidersHorizontal,
+  ArrowLeft,
+  Map,
+  Dumbbell
+} from "lucide-react"
+import { useEffect, useState } from "react"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+import { supabase } from "@/lib/supabaseClient"
+
+const trainers = [
+  {
+    id: 1,
+    name: "Sarah Miller",
+    specialty: "Weight Loss Specialist",
+    rating: 4.9,
+    reviews: 124,
+    price: 75,
+    location: "Downtown, San Francisco",
+    distance: "0.8 miles",
+    specializations: ["Weight Loss", "HIIT", "Nutrition"]
+  },
+  {
+    id: 2,
+    name: "David Park",
+    specialty: "Bodybuilding Coach",
+    rating: 4.8,
+    reviews: 89,
+    price: 85,
+    location: "Mission District, San Francisco",
+    distance: "1.2 miles",
+    specializations: ["Bodybuilding", "Strength Training"]
+  },
+  {
+    id: 3,
+    name: "Emma Roberts",
+    specialty: "CrossFit Trainer",
+    rating: 4.9,
+    reviews: 156,
+    price: 80,
+    location: "SoMa, San Francisco",
+    distance: "1.5 miles",
+    specializations: ["CrossFit", "Functional Fitness"]
+  },
+  {
+    id: 4,
+    name: "Mike Thompson",
+    specialty: "Strength & Conditioning",
+    rating: 4.7,
+    reviews: 98,
+    price: 70,
+    location: "Marina District, San Francisco",
+    distance: "2.0 miles",
+    specializations: ["Strength Training", "Athletic Performance"]
+  },
+  {
+    id: 5,
+    name: "Lisa Chen",
+    specialty: "HIIT & Cardio Expert",
+    rating: 4.8,
+    reviews: 112,
+    price: 65,
+    location: "Pacific Heights, San Francisco",
+    distance: "2.3 miles",
+    specializations: ["HIIT", "Cardio", "Endurance"]
+  },
+  {
+    id: 6,
+    name: "James Wilson",
+    specialty: "Yoga & Flexibility",
+    rating: 4.9,
+    reviews: 201,
+    price: 60,
+    location: "Hayes Valley, San Francisco",
+    distance: "1.8 miles",
+    specializations: ["Yoga", "Flexibility", "Mobility"]
+  },
+  {
+    id: 7,
+    name: "Amanda Foster",
+    specialty: "Pre/Post Natal Fitness",
+    rating: 5.0,
+    reviews: 67,
+    price: 90,
+    location: "Noe Valley, San Francisco",
+    distance: "2.5 miles",
+    specializations: ["Pre-Natal", "Post-Natal", "Core Strength"]
+  },
+  {
+    id: 8,
+    name: "Carlos Rodriguez",
+    specialty: "Boxing & MMA",
+    rating: 4.8,
+    reviews: 143,
+    price: 75,
+    location: "Tenderloin, San Francisco",
+    distance: "0.5 miles",
+    specializations: ["Boxing", "MMA", "Self-Defense"]
+  }
+]
+
+const specializations = [
+  "Weight Loss",
+  "Bodybuilding",
+  "Strength Training",
+  "HIIT",
+  "CrossFit",
+  "Yoga",
+  "Cardio",
+  "Nutrition",
+  "Boxing",
+  "MMA"
+]
+
+
+function FilterSidebar({ 
+  priceRange, 
+  setPriceRange,
+  selectedSpecs,
+  setSelectedSpecs,
+  minRating,
+  setMinRating
+}: {
+  priceRange: number[]
+  setPriceRange: (value: number[]) => void
+  selectedSpecs: string[]
+  setSelectedSpecs: (value: string[]) => void
+  minRating: number
+  setMinRating: (value: number) => void
+}) {
+  const toggleSpec = (spec: string) => {
+    if (selectedSpecs.includes(spec)) {
+      setSelectedSpecs(selectedSpecs.filter(s => s !== spec))
+    } else {
+      setSelectedSpecs([...selectedSpecs, spec])
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <Label className="text-foreground font-medium mb-3 block">Price Range</Label>
+        <div className="px-2">
+          <Slider
+            value={priceRange}
+            onValueChange={setPriceRange}
+            min={0}
+            max={150}
+            step={5}
+            className="mb-2"
+          />
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>${priceRange[0]}</span>
+            <span>${priceRange[1]}</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <Label className="text-foreground font-medium mb-3 block">Minimum Rating</Label>
+        <div className="flex items-center gap-2">
+          {[4, 4.5, 4.8].map((rating) => (
+            <button
+              key={rating}
+              onClick={() => setMinRating(rating)}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
+                minRating === rating
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:border-primary"
+              }`}
+            >
+              <Star className="w-3 h-3 fill-current" />
+              {rating}+
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <Label className="text-foreground font-medium mb-3 block">Specialization</Label>
+        <div className="flex flex-wrap gap-2">
+          {specializations.map((spec) => (
+            <button
+              key={spec}
+              onClick={() => toggleSpec(spec)}
+              className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                selectedSpecs.includes(spec)
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:border-primary"
+              }`}
+            >
+              {spec}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {(selectedSpecs.length > 0 || priceRange[0] > 0 || priceRange[1] < 150 || minRating > 0) && (
+        <Button
+          variant="ghost"
+          className="w-full text-muted-foreground hover:text-foreground"
+          onClick={() => {
+            setSelectedSpecs([])
+            setPriceRange([0, 150])
+            setMinRating(0)
+          }}
+        >
+          <X className="w-4 h-4 mr-2" />
+          Clear Filters
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function TrainerCard({ trainer }: { trainer: typeof trainers[0] }) {
+  return (
+    <Link href={`/trainers/${trainer.id}`}>
+      <Card className="bg-card border-border hover:border-primary/50 transition-colors h-full">
+        <CardContent className="p-6">
+          <div className="flex items-start gap-4">
+            <div className="w-16 h-16 rounded-xl bg-secondary flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-card-foreground truncate">{trainer.name}</h3>
+              <p className="text-sm text-muted-foreground truncate">{trainer.specialty}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-1">
+                  <Star className="w-4 h-4 text-primary fill-primary" />
+                  <span className="text-sm font-medium text-card-foreground">{trainer.rating}</span>
+                </div>
+                <span className="text-sm text-muted-foreground">({trainer.reviews})</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold text-primary">${trainer.price}</p>
+              <p className="text-xs text-muted-foreground">/session</p>
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <MapPin className="w-4 h-4" />
+              <span className="truncate">{trainer.distance}</span>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {trainer.specializations.slice(0, 3).map((spec) => (
+              <span 
+                key={spec} 
+                className="px-2 py-0.5 rounded text-xs bg-secondary text-muted-foreground"
+              >
+                {spec}
+              </span>
+            ))}
+          </div>
+
+          <Button className="w-full mt-4 bg-primary text-primary-foreground hover:bg-primary/90">
+            View Profile
+          </Button>
+        </CardContent>
+      </Card>
+    </Link>
+  )
+}
+
+export default function TrainersPage() {
+  const [searchQuery, setSearchQuery] = useState("")
+  const [priceRange, setPriceRange] = useState([0, 150])
+  const [selectedSpecs, setSelectedSpecs] = useState<string[]>([])
+  const [minRating, setMinRating] = useState(0)
+  const [trainerList, setTrainerList] = useState(trainers)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    const fetchTrainers = async () => {
+      const { data, error } = await supabase
+        .from("trainers")
+        .select("id, name, specialty, rating, reviews, price, location, distance, specializations")
+
+      if (error) {
+        console.error("Error loading trainers from Supabase", error)
+        return
+      }
+
+      if (data) {
+        const mapped = data.map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          specialty: t.specialty,
+          rating: t.rating ?? 0,
+          reviews: t.reviews ?? 0,
+          price: t.price ?? 0,
+          location: t.location ?? "",
+          distance: t.distance ?? "",
+          specializations: t.specializations ?? [],
+        }))
+
+        setTrainerList(mapped)
+      }
+    }
+
+    fetchTrainers().catch((err) => {
+      console.error("Unexpected error loading trainers", err)
+    })
+  }, [])
+
+  const filteredTrainers = trainerList.filter(trainer => {
+    const matchesSearch = trainer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         trainer.specialty.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesPrice = trainer.price >= priceRange[0] && trainer.price <= priceRange[1]
+    const matchesRating = trainer.rating === 0 ? true : trainer.rating >= minRating
+    const matchesSpec = selectedSpecs.length === 0 || 
+                       trainer.specializations.some(s => selectedSpecs.includes(s))
+    
+    return matchesSearch && matchesPrice && matchesRating && matchesSpec
+  })
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                <Dumbbell className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <span className="text-lg font-bold text-foreground hidden sm:inline">GymovaFlow</span>
+            </Link>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/map">
+              <Button variant="outline" size="sm" className="border-border text-foreground hover:bg-secondary">
+                <Map className="w-4 h-4 mr-2" />
+                Map View
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <main className="pt-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-foreground mb-2">Find Your Perfect Trainer</h1>
+            <p className="text-muted-foreground">Discover certified personal trainers near you</p>
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-8">
+            <aside className="hidden lg:block w-72 flex-shrink-0">
+              <div className="sticky top-24 bg-card border border-border rounded-xl p-6">
+                <div className="flex items-center gap-2 mb-6">
+                  <SlidersHorizontal className="w-5 h-5 text-foreground" />
+                  <h2 className="font-semibold text-foreground">Filters</h2>
+                </div>
+                <FilterSidebar
+                  priceRange={priceRange}
+                  setPriceRange={setPriceRange}
+                  selectedSpecs={selectedSpecs}
+                  setSelectedSpecs={setSelectedSpecs}
+                  minRating={minRating}
+                  setMinRating={setMinRating}
+                />
+              </div>
+            </aside>
+
+            <div className="flex-1">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search trainers by name or specialty..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 bg-input border-border"
+                  />
+                </div>
+                
+                {mounted ? (
+                  <Sheet>
+                    <SheetTrigger asChild>
+                      <Button variant="outline" className="lg:hidden border-border text-foreground hover:bg-secondary">
+                        <Filter className="w-4 h-4 mr-2" />
+                        Filters
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="right" className="bg-background border-border">
+                      <SheetHeader>
+                        <SheetTitle className="text-foreground">Filters</SheetTitle>
+                      </SheetHeader>
+                      <div className="mt-6">
+                        <FilterSidebar
+                          priceRange={priceRange}
+                          setPriceRange={setPriceRange}
+                          selectedSpecs={selectedSpecs}
+                          setSelectedSpecs={setSelectedSpecs}
+                          minRating={minRating}
+                          setMinRating={setMinRating}
+                        />
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                ) : (
+                  <div className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground lg:hidden">
+                    <Filter className="w-4 h-4 mr-2" />
+                    Filters
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm text-muted-foreground">
+                  {filteredTrainers.length} trainers found
+                </p>
+                {selectedSpecs.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    {selectedSpecs.map(spec => (
+                      <button
+                        key={spec}
+                        onClick={() => setSelectedSpecs(selectedSpecs.filter(s => s !== spec))}
+                        className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-primary/10 text-primary"
+                      >
+                        {spec}
+                        <X className="w-3 h-3" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredTrainers.map((trainer) => (
+                  <TrainerCard key={trainer.id} trainer={trainer} />
+                ))}
+              </div>
+
+              {filteredTrainers.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground">No trainers found matching your criteria.</p>
+                  <Button
+                    variant="ghost"
+                    className="mt-4 text-primary"
+                    onClick={() => {
+                      setSearchQuery("")
+                      setSelectedSpecs([])
+                      setPriceRange([0, 150])
+                      setMinRating(0)
+                    }}
+                  >
+                    Clear all filters
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}
