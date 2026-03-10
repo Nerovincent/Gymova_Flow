@@ -1,73 +1,62 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, Clock, MapPin, MoreVertical, Video, User } from "lucide-react"
+import { Calendar, Clock, MapPin, MoreVertical, User, Loader2 } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { supabase } from "@/lib/supabaseClient"
+import { useAuth } from "@/components/auth/AuthProvider"
+import type { BookingWithTrainer } from "@/types/booking"
 
-const upcomingBookings = [
-  {
-    id: 1,
-    trainer: "Mike Thompson",
-    specialty: "Strength Training",
-    date: "March 7, 2026",
-    time: "2:00 PM - 3:00 PM",
-    location: "Downtown Gym",
-    type: "in-person",
-    status: "confirmed"
-  },
-  {
-    id: 2,
-    trainer: "Lisa Chen",
-    specialty: "HIIT & Cardio",
-    date: "March 8, 2026",
-    time: "9:00 AM - 10:00 AM",
-    location: "FitZone Studio",
-    type: "in-person",
-    status: "confirmed"
-  },
-  {
-    id: 3,
-    trainer: "James Wilson",
-    specialty: "Yoga & Flexibility",
-    date: "March 10, 2026",
-    time: "7:00 PM - 8:00 PM",
-    location: "Online",
-    type: "virtual",
-    status: "pending"
+type DisplayBooking = {
+  id: string
+  trainer: string
+  specialty: string
+  date: string
+  time: string
+  location: string
+  status: string
+}
+
+function formatDate(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+}
+
+function formatTime(startTime: string, endTime: string): string {
+  const toDisplay = (t: string) => {
+    const [h, m] = t.split(":").map(Number)
+    const period = h >= 12 ? "PM" : "AM"
+    const displayH = h % 12 === 0 ? 12 : h % 12
+    return `${displayH}:${String(m).padStart(2, "0")} ${period}`
   }
-]
+  return `${toDisplay(startTime)} - ${toDisplay(endTime)}`
+}
 
-const pastBookings = [
-  {
-    id: 4,
-    trainer: "Sarah Miller",
-    specialty: "Weight Loss",
-    date: "March 3, 2026",
-    time: "10:00 AM - 11:00 AM",
-    location: "Fitness First",
-    type: "in-person",
-    status: "completed"
-  },
-  {
-    id: 5,
-    trainer: "David Park",
-    specialty: "Bodybuilding",
-    date: "March 1, 2026",
-    time: "6:00 PM - 7:00 PM",
-    location: "Iron Paradise Gym",
-    type: "in-person",
-    status: "completed"
+function mapToDisplay(booking: BookingWithTrainer): DisplayBooking {
+  return {
+    id: booking.id,
+    trainer: booking.trainers?.name ?? "Unknown Trainer",
+    specialty: booking.trainers?.specialty ?? "",
+    date: formatDate(booking.booking_date),
+    time: formatTime(booking.start_time, booking.end_time),
+    location: booking.trainers?.location ?? "",
+    status: booking.status,
   }
-]
+}
 
-function BookingCard({ booking }: { booking: typeof upcomingBookings[0] }) {
+const UPCOMING_STATUSES = ["pending", "confirmed"]
+const PAST_STATUSES = ["completed", "cancelled"]
+
+function BookingCard({ booking }: { booking: DisplayBooking }) {
   return (
     <Card className="bg-card border-border">
       <CardContent className="p-6">
@@ -114,24 +103,17 @@ function BookingCard({ booking }: { booking: typeof upcomingBookings[0] }) {
             {booking.time}
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            {booking.type === "virtual" ? <Video className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
+            <MapPin className="w-4 h-4" />
             {booking.location}
           </div>
         </div>
 
-        {booking.status !== "completed" && (
+        {booking.status !== "completed" && booking.status !== "cancelled" && (
           <div className="flex items-center gap-2">
-            {booking.type === "virtual" ? (
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-                <Video className="w-4 h-4 mr-2" />
-                Join Session
-              </Button>
-            ) : (
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-                <MapPin className="w-4 h-4 mr-2" />
-                Get Directions
-              </Button>
-            )}
+            <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+              <MapPin className="w-4 h-4 mr-2" />
+              Get Directions
+            </Button>
             <Button variant="outline" className="border-border text-foreground hover:bg-secondary">
               <User className="w-4 h-4 mr-2" />
               View Trainer
@@ -144,6 +126,93 @@ function BookingCard({ booking }: { booking: typeof upcomingBookings[0] }) {
 }
 
 export default function BookingsPage() {
+  const { user } = useAuth()
+  const [upcomingBookings, setUpcomingBookings] = useState<DisplayBooking[]>([])
+  const [pastBookings, setPastBookings] = useState<DisplayBooking[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!user) return
+
+    const fetchBookings = async () => {
+      setLoading(true)
+      setError(null)
+
+      const { data, error: fetchError } = await supabase
+        .from("bookings")
+        .select(`
+          id,
+          client_id,
+          trainer_id,
+          booking_date,
+          start_time,
+          end_time,
+          status,
+          goal_note,
+          created_at,
+          trainers (
+            id,
+            name,
+            specialty,
+            location
+          )
+        `)
+        .eq("client_id", user.id)
+        .order("booking_date", { ascending: false })
+
+      setLoading(false)
+
+      if (fetchError) {
+        setError("Failed to load bookings. Please try again.")
+        return
+      }
+
+      const all = (data ?? []) as unknown as BookingWithTrainer[]
+      setUpcomingBookings(
+        all
+          .filter((b) => UPCOMING_STATUSES.includes(b.status))
+          .sort((a, b) => a.booking_date.localeCompare(b.booking_date))
+          .map(mapToDisplay)
+      )
+      setPastBookings(
+        all
+          .filter((b) => PAST_STATUSES.includes(b.status))
+          .map(mapToDisplay)
+      )
+    }
+
+    fetchBookings()
+  }, [user])
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">My Bookings</h1>
+          <p className="text-muted-foreground">Manage your training sessions</p>
+        </div>
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">My Bookings</h1>
+          <p className="text-muted-foreground">Manage your training sessions</p>
+        </div>
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -162,15 +231,23 @@ export default function BookingsPage() {
         </TabsList>
 
         <TabsContent value="upcoming" className="space-y-4">
-          {upcomingBookings.map((booking) => (
-            <BookingCard key={booking.id} booking={booking} />
-          ))}
+          {upcomingBookings.length === 0 ? (
+            <p className="text-muted-foreground py-4">No upcoming bookings.</p>
+          ) : (
+            upcomingBookings.map((booking) => (
+              <BookingCard key={booking.id} booking={booking} />
+            ))
+          )}
         </TabsContent>
 
         <TabsContent value="past" className="space-y-4">
-          {pastBookings.map((booking) => (
-            <BookingCard key={booking.id} booking={booking} />
-          ))}
+          {pastBookings.length === 0 ? (
+            <p className="text-muted-foreground py-4">No past bookings.</p>
+          ) : (
+            pastBookings.map((booking) => (
+              <BookingCard key={booking.id} booking={booking} />
+            ))
+          )}
         </TabsContent>
       </Tabs>
     </div>

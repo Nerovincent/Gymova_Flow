@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Search,
   Filter,
@@ -36,111 +36,88 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { supabase } from "@/lib/supabaseClient"
 
 type ApplicationStatus = "pending" | "approved" | "rejected"
 
 interface Application {
-  id: number
+  id: string
+  user_id: string
   name: string
   email: string
-  avatar: string
-  phone: string
-  location: string
+  phone?: string
+  location?: string
   specializations: string[]
   certifications: string[]
-  experience: string
-  hourlyRate: number
-  bio: string
+  experience?: string
+  hourly_rate?: number
+  bio?: string
   appliedAt: string
   status: ApplicationStatus
 }
 
-const initialApplications: Application[] = [
-  {
-    id: 1,
-    name: "Sarah Mitchell",
-    email: "sarah.m@email.com",
-    avatar: "https://images.unsplash.com/photo-1548690312-e3b507d8c110?w=100&h=100&fit=crop&crop=face",
-    phone: "+1 (555) 123-4567",
-    location: "Los Angeles, CA",
-    specializations: ["HIIT", "Weight Training", "Nutrition"],
-    certifications: ["NASM-CPT", "ACE Certified"],
-    experience: "5 years",
-    hourlyRate: 85,
-    bio: "Passionate about helping clients achieve their fitness goals through personalized training programs. Specialized in high-intensity interval training and strength conditioning. Former competitive athlete with a background in sports science.",
-    appliedAt: "2 hours ago",
-    status: "pending",
-  },
-  {
-    id: 2,
-    name: "James Rodriguez",
-    email: "james.r@email.com",
-    avatar: "https://images.unsplash.com/photo-1567013127542-490d757e51fc?w=100&h=100&fit=crop&crop=face",
-    phone: "+1 (555) 234-5678",
-    location: "Miami, FL",
-    specializations: ["CrossFit", "Nutrition", "Strength Training"],
-    certifications: ["CrossFit Level 2", "Precision Nutrition"],
-    experience: "8 years",
-    hourlyRate: 95,
-    bio: "CrossFit coach with 8 years of experience training athletes of all levels. My approach combines functional fitness with proper nutrition guidance to deliver sustainable results. Competed in regional CrossFit games.",
-    appliedAt: "5 hours ago",
-    status: "pending",
-  },
-  {
-    id: 3,
-    name: "Emily Chen",
-    email: "emily.c@email.com",
-    avatar: "https://images.unsplash.com/photo-1594381898411-846e7d193883?w=100&h=100&fit=crop&crop=face",
-    phone: "+1 (555) 345-6789",
-    location: "San Francisco, CA",
-    specializations: ["Yoga", "Pilates", "Flexibility"],
-    certifications: ["RYT-500", "BASI Pilates"],
-    experience: "6 years",
-    hourlyRate: 75,
-    bio: "Certified yoga instructor and Pilates teacher focused on mind-body connection. I help clients improve flexibility, reduce stress, and build core strength through mindful movement practices.",
-    appliedAt: "1 day ago",
-    status: "pending",
-  },
-  {
-    id: 4,
-    name: "Marcus Johnson",
-    email: "marcus.j@email.com",
-    avatar: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=100&h=100&fit=crop&crop=face",
-    phone: "+1 (555) 456-7890",
-    location: "Chicago, IL",
-    specializations: ["Bodybuilding", "Weight Training"],
-    certifications: ["ISSA-CPT", "NASM-PES"],
-    experience: "10 years",
-    hourlyRate: 110,
-    bio: "Professional bodybuilder and certified personal trainer with a decade of experience. Specialized in muscle building, contest prep, and body transformation programs for serious fitness enthusiasts.",
-    appliedAt: "2 days ago",
-    status: "pending",
-  },
-  {
-    id: 5,
-    name: "Lisa Wang",
-    email: "lisa.w@email.com",
-    avatar: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=100&h=100&fit=crop&crop=face",
-    phone: "+1 (555) 567-8901",
-    location: "Seattle, WA",
-    specializations: ["Running", "Endurance", "HIIT"],
-    certifications: ["RRCA Certified Coach", "ACE-CPT"],
-    experience: "4 years",
-    hourlyRate: 70,
-    bio: "Marathon runner and endurance coach helping clients go from couch to 5K and beyond. My training programs focus on building sustainable running habits and preventing injuries.",
-    appliedAt: "3 days ago",
-    status: "approved",
-  },
-]
+function formatAppliedAt(createdAt: string | null): string {
+  if (!createdAt) return "Recently"
+  const d = new Date(createdAt)
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+  if (diffMins < 60) return `${diffMins} min ago`
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`
+  return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`
+}
 
 export default function ApplicationsPage() {
-  const [applications, setApplications] = useState<Application[]>(initialApplications)
+  const [applications, setApplications] = useState<Application[]>([])
+  const [loading, setLoading] = useState(true)
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
   const [filterStatus, setFilterStatus] = useState<"all" | ApplicationStatus>("all")
   const [searchQuery, setSearchQuery] = useState("")
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchApplications = async () => {
+      setLoadError(null)
+      const { data, error } = await supabase
+        .from("trainer_applications")
+        .select("id, user_id, name, email, phone, location, specializations, certifications, experience, hourly_rate, bio, status, created_at")
+        .order("created_at", { ascending: false })
+      if (error) {
+        const msg = error.message || error.code || "Unknown error"
+        console.error("Error loading trainer applications:", msg, error)
+        setLoadError(
+          "Could not load applications. Create the trainer_applications table and RLS policies (see docs/SCHEMA-trainer-applications.md)."
+        )
+        setApplications([])
+        setLoading(false)
+        return
+      }
+      const list: Application[] = (data ?? []).map((row: Record<string, unknown>) => ({
+        id: String(row.id),
+        user_id: String(row.user_id),
+        name: String(row.name ?? ""),
+        email: String(row.email ?? ""),
+        phone: row.phone != null ? String(row.phone) : undefined,
+        location: row.location != null ? String(row.location) : undefined,
+        specializations: Array.isArray(row.specializations) ? (row.specializations as string[]) : [],
+        certifications: Array.isArray(row.certifications) ? (row.certifications as string[]) : [],
+        experience: row.experience != null ? String(row.experience) : undefined,
+        hourly_rate: row.hourly_rate != null ? Number(row.hourly_rate) : undefined,
+        bio: row.bio != null ? String(row.bio) : undefined,
+        appliedAt: formatAppliedAt(row.created_at as string | null),
+        status: (row.status as ApplicationStatus) ?? "pending",
+      }))
+      setApplications(list)
+      setLoading(false)
+    }
+    fetchApplications()
+  }, [])
 
   const filteredApplications = applications.filter((app) => {
     const matchesStatus = filterStatus === "all" || app.status === filterStatus
@@ -153,17 +130,45 @@ export default function ApplicationsPage() {
   const approvedCount = applications.filter((a) => a.status === "approved").length
   const rejectedCount = applications.filter((a) => a.status === "rejected").length
 
-  const handleApprove = (id: number) => {
+  const handleApprove = async (id: string) => {
+    setActionError(null)
+    const app = applications.find((a) => a.id === id)
+    if (!app) return
+    const { error: updateAppError } = await supabase
+      .from("trainer_applications")
+      .update({ status: "approved" })
+      .eq("id", id)
+    if (updateAppError) {
+      setActionError(updateAppError.message)
+      return
+    }
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({ trainer_status: "approved" })
+      .eq("id", app.user_id)
+    if (profileError) {
+      console.error("Error updating profile", profileError)
+      setActionError("Application approved but profile update failed. Trainer may need to be set manually.")
+    }
     setApplications((prev) =>
-      prev.map((app) => (app.id === id ? { ...app, status: "approved" as ApplicationStatus } : app))
+      prev.map((a) => (a.id === id ? { ...a, status: "approved" as ApplicationStatus } : a))
     )
     setIsDialogOpen(false)
     setSelectedApplication(null)
   }
 
-  const handleReject = (id: number) => {
+  const handleReject = async (id: string) => {
+    setActionError(null)
+    const { error } = await supabase
+      .from("trainer_applications")
+      .update({ status: "rejected" })
+      .eq("id", id)
+    if (error) {
+      setActionError(error.message)
+      return
+    }
     setApplications((prev) =>
-      prev.map((app) => (app.id === id ? { ...app, status: "rejected" as ApplicationStatus } : app))
+      prev.map((a) => (a.id === id ? { ...a, status: "rejected" as ApplicationStatus } : a))
     )
     setIsRejectDialogOpen(false)
     setIsDialogOpen(false)
@@ -268,9 +273,22 @@ export default function ApplicationsPage() {
           <CardTitle className="text-foreground">Applications ({filteredApplications.length})</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {filteredApplications.length === 0 ? (
+          {loadError && (
+            <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 text-sm text-foreground mb-4">
+              {loadError}
+            </div>
+          )}
+          {loading ? (
             <div className="text-center py-12">
-              <p className="text-muted-foreground">No applications found</p>
+              <p className="text-muted-foreground">Loading applications...</p>
+            </div>
+          ) : filteredApplications.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">
+                {loadError
+                  ? "Fix the issue above and refresh the page."
+                  : "No applications found. Trainer applications from signup appear here once the trainer_applications table exists (see docs/SCHEMA-trainer-applications.md)."}
+              </p>
             </div>
           ) : (
             filteredApplications.map((application) => (
@@ -280,7 +298,6 @@ export default function ApplicationsPage() {
               >
                 <div className="flex items-center gap-4">
                   <Avatar className="h-14 w-14 border-2 border-primary/30">
-                    <AvatarImage src={application.avatar} />
                     <AvatarFallback className="bg-primary/20 text-primary">
                       {application.name.split(" ").map((n) => n[0]).join("")}
                     </AvatarFallback>
@@ -303,18 +320,24 @@ export default function ApplicationsPage() {
                     </div>
                     <p className="text-sm text-muted-foreground">{application.email}</p>
                     <div className="flex items-center gap-3 mt-2">
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <MapPin className="h-3 w-3" />
-                        {application.location}
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Briefcase className="h-3 w-3" />
-                        {application.experience}
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <DollarSign className="h-3 w-3" />
-                        ${application.hourlyRate}/hr
-                      </div>
+                      {application.location && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <MapPin className="h-3 w-3" />
+                          {application.location}
+                        </div>
+                      )}
+                      {application.experience && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Briefcase className="h-3 w-3" />
+                          {application.experience}
+                        </div>
+                      )}
+                      {application.hourly_rate != null && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <DollarSign className="h-3 w-3" />
+                          ${application.hourly_rate}/hr
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 mt-2">
                       {application.specializations.slice(0, 3).map((spec) => (
@@ -385,10 +408,12 @@ export default function ApplicationsPage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-6 py-4">
+                {actionError && (
+                  <p className="text-sm text-destructive">{actionError}</p>
+                )}
                 {/* Applicant Info */}
                 <div className="flex items-center gap-4">
                   <Avatar className="h-16 w-16 border-2 border-primary/30">
-                    <AvatarImage src={selectedApplication.avatar} />
                     <AvatarFallback className="bg-primary/20 text-primary text-xl">
                       {selectedApplication.name.split(" ").map((n) => n[0]).join("")}
                     </AvatarFallback>
@@ -399,63 +424,77 @@ export default function ApplicationsPage() {
                       <Mail className="h-4 w-4" />
                       {selectedApplication.email}
                     </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <MapPin className="h-4 w-4" />
-                      {selectedApplication.location}
-                    </div>
+                    {selectedApplication.location && (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <MapPin className="h-4 w-4" />
+                        {selectedApplication.location}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Details Grid */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 rounded-xl bg-secondary/50 border border-border">
-                    <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                      <Briefcase className="h-4 w-4" />
-                      <span className="text-sm">Experience</span>
-                    </div>
-                    <p className="font-semibold text-foreground">{selectedApplication.experience}</p>
+                {(selectedApplication.experience != null || selectedApplication.hourly_rate != null) && (
+                  <div className="grid grid-cols-2 gap-4">
+                    {selectedApplication.experience != null && (
+                      <div className="p-4 rounded-xl bg-secondary/50 border border-border">
+                        <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                          <Briefcase className="h-4 w-4" />
+                          <span className="text-sm">Experience</span>
+                        </div>
+                        <p className="font-semibold text-foreground">{selectedApplication.experience}</p>
+                      </div>
+                    )}
+                    {selectedApplication.hourly_rate != null && (
+                      <div className="p-4 rounded-xl bg-secondary/50 border border-border">
+                        <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                          <DollarSign className="h-4 w-4" />
+                          <span className="text-sm">Hourly Rate</span>
+                        </div>
+                        <p className="font-semibold text-foreground">${selectedApplication.hourly_rate}/hour</p>
+                      </div>
+                    )}
                   </div>
-                  <div className="p-4 rounded-xl bg-secondary/50 border border-border">
-                    <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                      <DollarSign className="h-4 w-4" />
-                      <span className="text-sm">Hourly Rate</span>
-                    </div>
-                    <p className="font-semibold text-foreground">${selectedApplication.hourlyRate}/hour</p>
-                  </div>
-                </div>
+                )}
 
                 {/* Specializations */}
-                <div>
-                  <h4 className="font-medium text-foreground mb-2">Specializations</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedApplication.specializations.map((spec) => (
-                      <Badge key={spec} variant="secondary" className="bg-primary/10 text-primary border-0">
-                        {spec}
-                      </Badge>
-                    ))}
+                {selectedApplication.specializations.length > 0 && (
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">Specializations</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedApplication.specializations.map((spec) => (
+                        <Badge key={spec} variant="secondary" className="bg-primary/10 text-primary border-0">
+                          {spec}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Certifications */}
-                <div>
-                  <h4 className="font-medium text-foreground mb-2 flex items-center gap-2">
-                    <Award className="h-4 w-4 text-primary" />
-                    Certifications
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedApplication.certifications.map((cert) => (
-                      <Badge key={cert} variant="outline" className="border-border text-foreground">
-                        {cert}
-                      </Badge>
-                    ))}
+                {selectedApplication.certifications.length > 0 && (
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2 flex items-center gap-2">
+                      <Award className="h-4 w-4 text-primary" />
+                      Certifications
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedApplication.certifications.map((cert) => (
+                        <Badge key={cert} variant="outline" className="border-border text-foreground">
+                          {cert}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Bio */}
-                <div>
-                  <h4 className="font-medium text-foreground mb-2">About</h4>
-                  <p className="text-muted-foreground leading-relaxed">{selectedApplication.bio}</p>
-                </div>
+                {selectedApplication.bio && (
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">About</h4>
+                    <p className="text-muted-foreground leading-relaxed">{selectedApplication.bio}</p>
+                  </div>
+                )}
               </div>
               <DialogFooter className="flex gap-2">
                 {selectedApplication.status === "pending" && (

@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { 
@@ -14,9 +14,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Star,
-  Dumbbell
+  Loader2
 } from "lucide-react"
 import { useState } from "react"
+import { supabase } from "@/lib/supabaseClient"
+import { useAuth } from "@/components/auth/AuthProvider"
+import { useToast } from "@/hooks/use-toast"
 
 const trainers: Record<string, { id: number; name: string; specialty: string; rating: number; price: number; location: string }> = {
   "1": {
@@ -38,11 +41,6 @@ const trainers: Record<string, { id: number; name: string; specialty: string; ra
 }
 
 const defaultTrainer = trainers["1"]
-
-const timeSlots = [
-  "6:00 AM", "7:00 AM", "8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM",
-  "2:00 PM", "3:00 PM", "4:00 PM", "5:00 PM", "6:00 PM", "7:00 PM"
-]
 
 const availableSlots: Record<string, string[]> = {
   "2026-03-07": ["9:00 AM", "10:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"],
@@ -75,8 +73,28 @@ function generateCalendarDays(year: number, month: number) {
   return days
 }
 
+function parseTimeTo24h(timeStr: string): string {
+  const [time, period] = timeStr.split(" ")
+  const [hours, minutes] = time.split(":")
+  let h = parseInt(hours)
+  if (period === "PM" && h !== 12) h += 12
+  if (period === "AM" && h === 12) h = 0
+  return `${String(h).padStart(2, "0")}:${minutes}:00`
+}
+
+function addOneHour(timeStr: string): string {
+  const parsed = parseTimeTo24h(timeStr)
+  const [h, m, s] = parsed.split(":").map(Number)
+  const newH = (h + 1) % 24
+  return `${String(newH).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+}
+
 export default function BookingPage() {
   const params = useParams()
+  const router = useRouter()
+  const { user } = useAuth()
+  const { toast } = useToast()
+
   const trainerId = params.id as string
   const trainer = trainers[trainerId] || defaultTrainer
   
@@ -84,7 +102,10 @@ export default function BookingPage() {
   const [currentYear, setCurrentYear] = useState(2026)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
+  const [goalNote, setGoalNote] = useState("")
   const [step, setStep] = useState(1)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [bookingError, setBookingError] = useState<string | null>(null)
 
   const days = generateCalendarDays(currentYear, currentMonth)
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
@@ -138,6 +159,47 @@ export default function BookingPage() {
     return date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })
   }
 
+  const handleConfirmBooking = async () => {
+    if (!user) {
+      setBookingError("You must be logged in to book a session.")
+      return
+    }
+    if (!selectedDate || !selectedTime) {
+      setBookingError("Please select a date and time.")
+      return
+    }
+
+    setIsSubmitting(true)
+    setBookingError(null)
+
+    const startTime = parseTimeTo24h(selectedTime)
+    const endTime = addOneHour(selectedTime)
+
+    const { error } = await supabase.from("bookings").insert({
+      client_id: user.id,
+      trainer_id: trainer.id,
+      booking_date: selectedDate,
+      start_time: startTime,
+      end_time: endTime,
+      status: "pending",
+      goal_note: goalNote.trim() || null,
+    })
+
+    setIsSubmitting(false)
+
+    if (error) {
+      setBookingError(error.message || "Failed to create booking. Please try again.")
+      return
+    }
+
+    toast({
+      title: "Booking request sent to trainer",
+      description: `Your session with ${trainer.name} on ${formatSelectedDate()} at ${selectedTime} is pending confirmation.`,
+    })
+
+    router.push("/dashboard/bookings")
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
@@ -147,7 +209,7 @@ export default function BookingPage() {
             <span className="hidden sm:inline">Back to Profile</span>
           </Link>
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Step {step} of 3</span>
+            <span className="text-muted-foreground">Step {step} of 2</span>
           </div>
         </div>
       </header>
@@ -286,10 +348,29 @@ export default function BookingPage() {
                         </div>
                       </div>
 
+                      <div>
+                        <label className="block text-sm font-medium text-card-foreground mb-2">
+                          Goal note <span className="text-muted-foreground font-normal">(optional)</span>
+                        </label>
+                        <textarea
+                          value={goalNote}
+                          onChange={(e) => setGoalNote(e.target.value)}
+                          placeholder="e.g. I want to lose weight and improve my endurance..."
+                          rows={3}
+                          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                        />
+                      </div>
+
                       <div className="flex items-center justify-between">
                         <span className="text-card-foreground">Session Fee</span>
                         <span className="text-xl font-bold text-primary">${trainer.price}</span>
                       </div>
+
+                      {bookingError && (
+                        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                          {bookingError}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
 
@@ -298,44 +379,29 @@ export default function BookingPage() {
                       variant="outline"
                       className="flex-1 border-border text-foreground hover:bg-secondary"
                       onClick={() => setStep(1)}
+                      disabled={isSubmitting}
                     >
                       Back
                     </Button>
                     <Button
                       className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
-                      onClick={() => setStep(3)}
+                      onClick={handleConfirmBooking}
+                      disabled={isSubmitting}
                     >
-                      <CreditCard className="w-4 h-4 mr-2" />
-                      Confirm & Pay
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Confirming...
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="w-4 h-4 mr-2" />
+                          Confirm Booking
+                        </>
+                      )}
                     </Button>
                   </div>
                 </>
-              )}
-
-              {step === 3 && (
-                <Card className="bg-card border-border">
-                  <CardContent className="py-12 text-center">
-                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
-                      <CheckCircle className="w-8 h-8 text-primary" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-card-foreground mb-2">Booking Confirmed!</h2>
-                    <p className="text-muted-foreground mb-6">
-                      Your session with {trainer.name} has been booked for {formatSelectedDate()} at {selectedTime}.
-                    </p>
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                      <Link href="/dashboard/bookings">
-                        <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-                          View My Bookings
-                        </Button>
-                      </Link>
-                      <Link href="/trainers">
-                        <Button variant="outline" className="border-border text-foreground hover:bg-secondary">
-                          Browse More Trainers
-                        </Button>
-                      </Link>
-                    </div>
-                  </CardContent>
-                </Card>
               )}
             </div>
 

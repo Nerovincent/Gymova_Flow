@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useState, useEffect } from "react"
 import {
   Dumbbell,
   LayoutDashboard,
@@ -24,6 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { adminLogout } from "./actions"
 
 const sidebarLinks = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -40,6 +42,23 @@ export default function AdminLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (pathname === "/admin/login") {
+    return <>{children}</>
+  }
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <span className="text-muted-foreground">Loading...</span>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -110,7 +129,10 @@ export default function AdminLayout({
                 Account Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuItem className="text-destructive hover:bg-destructive/10">
+              <DropdownMenuItem
+                className="text-destructive hover:bg-destructive/10"
+                onClick={() => void adminLogout()}
+              >
                 <LogOut className="h-4 w-4 mr-2" />
                 Sign out
               </DropdownMenuItem>

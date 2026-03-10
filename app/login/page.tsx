@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Dumbbell, Eye, EyeOff, ArrowRight } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 import { useAuth } from "@/components/auth/AuthProvider"
+import { getIsApprovedTrainer, getTrainerStatus } from "@/lib/trainerAuth"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -21,8 +22,10 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!loading && session) {
-      router.replace("/dashboard")
+    if (!loading && session?.user) {
+      getIsApprovedTrainer(session.user.id).then((isTrainer) => {
+        router.replace(isTrainer ? "/trainer" : "/dashboard")
+      })
     }
   }, [loading, session, router])
 
@@ -33,7 +36,7 @@ export default function LoginPage() {
     setIsLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
@@ -44,8 +47,25 @@ export default function LoginPage() {
       return
     }
 
+    const userId = data.user?.id
+    if (!userId) {
+      setIsLoading(false)
+      return
+    }
+
+    const trainerStatus = await getTrainerStatus(userId)
+    if (trainerStatus === "pending") {
+      await supabase.auth.signOut()
+      setError(
+        "Your trainer application is under review. You'll be notified when it's accepted. You can log in once an admin has approved your application."
+      )
+      setIsLoading(false)
+      return
+    }
+
+    const isTrainer = trainerStatus === "approved"
     setIsLoading(false)
-    router.replace("/dashboard")
+    router.replace(isTrainer ? "/trainer" : "/dashboard")
   }
 
   if (loading) {

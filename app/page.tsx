@@ -36,12 +36,16 @@ function Navbar() {
           </div>
 
           <div className="hidden md:flex items-center gap-4">
-            <Button variant="ghost" className="text-foreground">
-              Log in
-            </Button>
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-              Get Started
-            </Button>
+            <Link href="/login">
+              <Button variant="ghost" className="text-foreground">
+                Log in
+              </Button>
+            </Link>
+            <Link href="/signup">
+              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+                Get Started
+              </Button>
+            </Link>
           </div>
 
           <button
@@ -69,12 +73,16 @@ function Navbar() {
               Dashboard
             </Link>
             <div className="flex flex-col gap-2 pt-4 border-t border-border">
-              <Button variant="ghost" className="justify-start text-foreground">
-                Log in
-              </Button>
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-                Get Started
-              </Button>
+              <Link href="/login">
+                <Button variant="ghost" className="justify-start text-foreground w-full">
+                  Log in
+                </Button>
+              </Link>
+              <Link href="/signup">
+                <Button className="bg-primary text-primary-foreground hover:bg-primary/90 w-full">
+                  Get Started
+                </Button>
+              </Link>
             </div>
           </div>
         </div>

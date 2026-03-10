@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth/AuthProvider"
@@ -30,16 +30,22 @@ export default function SignupPage() {
   const [accountType, setAccountType] = useState<"client" | "trainer">("client")
   const [step, setStep] = useState(1)
   const [trainerRequestSubmitted, setTrainerRequestSubmitted] = useState(false)
+  const isSubmittingRef = useRef(false)
 
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [location, setLocation] = useState("")
+  const [certifications, setCertifications] = useState("")
+  const [experience, setExperience] = useState("")
+  const [rate, setRate] = useState("")
+  const [bio, setBio] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!loading && session) {
+    if (!loading && session && !isSubmittingRef.current) {
       router.replace("/dashboard")
     }
   }, [loading, session, router])
@@ -57,6 +63,7 @@ export default function SignupPage() {
     }
 
     setIsLoading(true)
+    isSubmittingRef.current = true
 
     try {
       const fullName = `${firstName} ${lastName}`.trim()
@@ -85,6 +92,7 @@ export default function SignupPage() {
         } else {
           setError(msg)
         }
+        isSubmittingRef.current = false
         return
       }
 
@@ -92,22 +100,40 @@ export default function SignupPage() {
       const hasSession = !!data.session
 
       // Only upsert profile when we have a session (user is signed in). If email
-      // confirmation is required, there’s no session yet and RLS would block the insert.
+      // confirmation is required, there's no session yet and RLS would block the insert.
       if (userId && hasSession) {
+        const profilePayload: Record<string, unknown> = { id: userId, full_name: fullName }
+        if (accountType === "trainer") {
+          profilePayload.role = "trainer"
+          profilePayload.trainer_status = "pending"
+        }
         const { error: profileError } = await supabase
           .from("profiles")
-          .upsert(
-            { id: userId, full_name: fullName },
-            { onConflict: "id" }
-          )
+          .upsert(profilePayload, { onConflict: "id" })
 
         if (profileError) {
           console.error("Error creating profile", profileError.message, profileError.code, profileError)
+        }
+
+        // Store trainer application for admin review (see docs/SCHEMA-trainer-applications.md).
+        if (accountType === "trainer") {
+          const { error: appError } = await supabase.from("trainer_applications").insert({
+            user_id: userId,
+            name: fullName,
+            email,
+            status: "pending",
+            certifications: certifications ? [certifications] : [],
+            experience: experience || null,
+            hourly_rate: rate ? Number(rate) : null,
+            bio: bio || null,
+          })
+          if (appError) console.error("Trainer application save failed (table may not exist yet)", appError)
         }
       }
 
       if (accountType === "trainer") {
         setTrainerRequestSubmitted(true)
+        await supabase.auth.signOut()
       } else if (data.session) {
         router.replace("/dashboard")
       } else {
@@ -116,6 +142,7 @@ export default function SignupPage() {
     } catch (err) {
       console.error("Unexpected error during signup", err)
       setError("Something went wrong while creating your account. Please try again.")
+      isSubmittingRef.current = false
     } finally {
       setIsLoading(false)
     }
@@ -152,8 +179,7 @@ export default function SignupPage() {
               <div>
                 <p className="text-sm font-medium text-foreground">What happens next?</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Our admin team will verify your certifications and experience. You&apos;ll receive an email once your
-                  application is approved.
+                  Your application is under review. You&apos;ll be notified when it&apos;s accepted. Once approved, you can log in to access the trainer dashboard.
                 </p>
               </div>
             </div>
@@ -164,14 +190,9 @@ export default function SignupPage() {
                 Back to Home
               </Button>
             </Link>
-            <Link href="/login">
-              <Button
-                variant="outline"
-                className="w-full h-12 bg-secondary border-border text-foreground hover:bg-muted"
-              >
-                Sign in to existing account
-              </Button>
-            </Link>
+            <p className="text-xs text-muted-foreground">
+              You cannot log in until your application has been approved by an admin.
+            </p>
           </div>
         </div>
       </div>
@@ -437,6 +458,8 @@ export default function SignupPage() {
                         id="location"
                         placeholder="City or zip code"
                         className="h-12 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
                       />
                     </div>
                   </>
@@ -481,6 +504,8 @@ export default function SignupPage() {
                         placeholder="e.g., NASM, ACE, ISSA"
                         required
                         className="h-12 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                        value={certifications}
+                        onChange={(e) => setCertifications(e.target.value)}
                       />
                     </div>
 
@@ -494,6 +519,8 @@ export default function SignupPage() {
                         placeholder="5"
                         required
                         className="h-12 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                        value={experience}
+                        onChange={(e) => setExperience(e.target.value)}
                       />
                     </div>
 
@@ -507,6 +534,8 @@ export default function SignupPage() {
                         placeholder="75"
                         required
                         className="h-12 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                        value={rate}
+                        onChange={(e) => setRate(e.target.value)}
                       />
                     </div>
 
@@ -519,6 +548,8 @@ export default function SignupPage() {
                         placeholder="Describe your training philosophy, experience, and what makes you unique..."
                         required
                         className="min-h-[100px] bg-secondary border-border text-foreground placeholder:text-muted-foreground resize-none"
+                        value={bio}
+                        onChange={(e) => setBio(e.target.value)}
                       />
                     </div>
                   </>
