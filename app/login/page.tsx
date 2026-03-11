@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -20,10 +20,15 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
+  // Prevents the auto-redirect useEffect from firing mid-submit and racing
+  // with the manual redirect logic in handleSubmit.
+  const isHandlingSubmit = useRef(false)
 
   useEffect(() => {
+    if (isHandlingSubmit.current) return
     if (!loading && session?.user) {
       getIsApprovedTrainer(session.user.id).then((isTrainer) => {
+        if (isHandlingSubmit.current) return
         router.replace(isTrainer ? "/trainer" : "/dashboard")
       })
     }
@@ -35,6 +40,7 @@ export default function LoginPage() {
 
     setIsLoading(true)
     setError(null)
+    isHandlingSubmit.current = true
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -44,22 +50,28 @@ export default function LoginPage() {
     if (error) {
       setError(error.message)
       setIsLoading(false)
+      isHandlingSubmit.current = false
       return
     }
 
     const userId = data.user?.id
     if (!userId) {
       setIsLoading(false)
+      isHandlingSubmit.current = false
       return
     }
 
     const trainerStatus = await getTrainerStatus(userId)
+
     if (trainerStatus === "pending") {
       await supabase.auth.signOut()
-      setError(
-        "Your trainer application is under review. You'll be notified when it's accepted. You can log in once an admin has approved your application."
-      )
-      setIsLoading(false)
+      router.replace("/trainer-pending")
+      return
+    }
+
+    if (trainerStatus === "rejected") {
+      await supabase.auth.signOut()
+      router.replace("/trainer-rejected")
       return
     }
 

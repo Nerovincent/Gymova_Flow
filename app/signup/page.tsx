@@ -97,47 +97,54 @@ export default function SignupPage() {
       }
 
       const userId = data.user?.id
-      const hasSession = !!data.session
-
-      // Only upsert profile when we have a session (user is signed in). If email
-      // confirmation is required, there's no session yet and RLS would block the insert.
-      if (userId && hasSession) {
-        const profilePayload: Record<string, unknown> = { id: userId, full_name: fullName }
-        if (accountType === "trainer") {
-          profilePayload.role = "trainer"
-          profilePayload.trainer_status = "pending"
-        }
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .upsert(profilePayload, { onConflict: "id" })
-
-        if (profileError) {
-          console.error("Error creating profile", profileError.message, profileError.code, profileError)
-        }
-
-        // Store trainer application for admin review (see docs/SCHEMA-trainer-applications.md).
-        if (accountType === "trainer") {
-          const { error: appError } = await supabase.from("trainer_applications").insert({
-            user_id: userId,
-            name: fullName,
-            email,
-            status: "pending",
-            certifications: certifications ? [certifications] : [],
-            experience: experience || null,
-            hourly_rate: rate ? Number(rate) : null,
-            bio: bio || null,
-          })
-          if (appError) console.error("Trainer application save failed (table may not exist yet)", appError)
-        }
-      }
 
       if (accountType === "trainer") {
-        setTrainerRequestSubmitted(true)
+        if (!userId) {
+          setError("Signup succeeded but no user ID was returned. Please try again.")
+          isSubmittingRef.current = false
+          return
+        }
+
+        // Use server-side API route (service role) so profile + application are
+        // created regardless of whether email confirmation is enabled.
+        const res = await fetch("/api/trainer-signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            fullName,
+            email,
+            certifications,
+            experience,
+            hourlyRate: rate,
+            bio,
+            specializations: [],
+          }),
+        })
+
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}))
+          console.error("Trainer signup API error:", json)
+          // Don't block the UX — the auth user exists; admin can still see them.
+          // We show the confirmation screen anyway so the user knows to wait.
+        }
+
+        // Sign out the trainer so they can't access any dashboard until approved.
         await supabase.auth.signOut()
-      } else if (data.session) {
-        router.replace("/dashboard")
-      } else {
-        setSuccess("Account created! Check your email to confirm your address, then sign in.")
+        setTrainerRequestSubmitted(true)
+      } else if (userId) {
+        // Client account — upsert profile directly (client is already signed in).
+        if (data.session) {
+          const { error: profileError } = await supabase
+            .from("profiles")
+            .upsert({ id: userId, full_name: fullName, role: "client" }, { onConflict: "id" })
+          if (profileError) {
+            console.error("Error creating client profile", profileError)
+          }
+          router.replace("/dashboard")
+        } else {
+          setSuccess("Account created! Check your email to confirm your address, then sign in.")
+        }
       }
     } catch (err) {
       console.error("Unexpected error during signup", err)

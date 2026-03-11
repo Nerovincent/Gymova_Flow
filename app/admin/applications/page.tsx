@@ -37,6 +37,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabaseClient"
+import { approveTrainer, rejectTrainer } from "@/app/admin/actions"
 
 type ApplicationStatus = "pending" | "approved" | "rejected"
 
@@ -134,21 +135,10 @@ export default function ApplicationsPage() {
     setActionError(null)
     const app = applications.find((a) => a.id === id)
     if (!app) return
-    const { error: updateAppError } = await supabase
-      .from("trainer_applications")
-      .update({ status: "approved" })
-      .eq("id", id)
-    if (updateAppError) {
-      setActionError(updateAppError.message)
+    const result = await approveTrainer(id, app.user_id)
+    if (result?.error) {
+      setActionError(result.error)
       return
-    }
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({ trainer_status: "approved" })
-      .eq("id", app.user_id)
-    if (profileError) {
-      console.error("Error updating profile", profileError)
-      setActionError("Application approved but profile update failed. Trainer may need to be set manually.")
     }
     setApplications((prev) =>
       prev.map((a) => (a.id === id ? { ...a, status: "approved" as ApplicationStatus } : a))
@@ -159,12 +149,11 @@ export default function ApplicationsPage() {
 
   const handleReject = async (id: string) => {
     setActionError(null)
-    const { error } = await supabase
-      .from("trainer_applications")
-      .update({ status: "rejected" })
-      .eq("id", id)
-    if (error) {
-      setActionError(error.message)
+    const app = applications.find((a) => a.id === id)
+    if (!app) return
+    const result = await rejectTrainer(id, app.user_id)
+    if (result?.error) {
+      setActionError(result.error)
       return
     }
     setApplications((prev) =>
