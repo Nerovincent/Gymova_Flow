@@ -10,6 +10,7 @@ import {
   Clock,
   MessageCircle,
   User,
+  MapPin,
   Menu,
   X,
   Dumbbell,
@@ -24,6 +25,7 @@ const sidebarLinks = [
   { href: "/trainer", label: "Dashboard", icon: LayoutDashboard },
   { href: "/trainer/availability", label: "My availability", icon: Clock },
   { href: "/trainer/sessions", label: "Sessions", icon: Calendar },
+  { href: "/trainer/locations", label: "My locations", icon: MapPin },
   { href: "/messages", label: "Messages", icon: MessageCircle },
   { href: "/dashboard/profile", label: "Profile", icon: User },
 ]

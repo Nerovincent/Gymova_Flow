@@ -4,13 +4,13 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/components/auth/AuthProvider"
-import { supabase } from "@/lib/supabaseClient"
+import { getTrainerAvailability, upsertTrainerAvailability, DEFAULT_AVAILABILITY } from "@/lib/supabase/availability"
 import { Loader2 } from "lucide-react"
 
 const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const
-const DEFAULT_SLOTS: Record<string, string[]> = Object.fromEntries(
-  DAYS.map((d) => [d, []])
-) as Record<string, string[]>
+const DEFAULT_SLOTS: Record<string, string[]> = { ...DEFAULT_AVAILABILITY }
+
+// ---------------------------------------------------------------------------
 
 const TIME_OPTIONS = [
   "6:00 AM",
@@ -29,18 +29,6 @@ const TIME_OPTIONS = [
   "7:00 PM",
 ]
 
-function ensureAvailability(obj: unknown): Record<string, string[]> {
-  if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-    const out: Record<string, string[]> = { ...DEFAULT_SLOTS }
-    for (const day of DAYS) {
-      const val = (obj as Record<string, unknown>)[day]
-      out[day] = Array.isArray(val) ? val.filter((t): t is string => typeof t === "string") : []
-    }
-    return out
-  }
-  return { ...DEFAULT_SLOTS }
-}
-
 export default function TrainerAvailabilityPage() {
   const { session } = useAuth()
   const [availability, setAvailability] = useState<Record<string, string[]>>(DEFAULT_SLOTS)
@@ -50,17 +38,16 @@ export default function TrainerAvailabilityPage() {
 
   useEffect(() => {
     if (!session?.user?.id) return
-    const run = async () => {
-      setLoading(true)
-      const { data } = await supabase
-        .from("trainer_availability")
-        .select("availability")
-        .eq("user_id", session.user.id)
-        .maybeSingle()
-      setAvailability(ensureAvailability((data as { availability?: unknown })?.availability))
+
+    setLoading(true)
+    getTrainerAvailability(session.user.id).then(({ data, error }) => {
+      if (error) {
+        setMessage({ type: "error", text: "Could not load your availability." })
+      } else {
+        setAvailability(data)
+      }
       setLoading(false)
-    }
-    run().catch(() => setLoading(false))
+    })
   }, [session?.user?.id])
 
   const toggleSlot = (day: string, time: string) => {
@@ -78,12 +65,12 @@ export default function TrainerAvailabilityPage() {
     if (!session?.user?.id) return
     setSaving(true)
     setMessage(null)
-    const { error } = await supabase
-      .from("trainer_availability")
-      .upsert({ user_id: session.user.id, availability: availability }, { onConflict: "user_id" })
+
+    const { error } = await upsertTrainerAvailability(session.user.id, availability)
     setSaving(false)
+
     if (error) {
-      setMessage({ type: "error", text: "Could not save. Make sure the trainer_availability table exists (see docs)." })
+      setMessage({ type: "error", text: "Could not save availability. Please try again." })
       return
     }
     setMessage({ type: "success", text: "Availability saved." })

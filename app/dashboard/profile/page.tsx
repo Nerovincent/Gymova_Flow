@@ -8,14 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Camera, Mail, Target, Calendar } from "lucide-react"
 import { useAuth } from "@/components/auth/AuthProvider"
-import { supabase } from "@/lib/supabaseClient"
-
-type Profile = {
-  id: string
-  full_name: string | null
-  avatar_url: string | null
-  created_at: string | null
-}
+import { getProfile, upsertProfile } from "@/lib/supabase/profiles"
+import type { Profile } from "@/types/profile"
 
 export default function ProfilePage() {
   const { session } = useAuth()
@@ -28,42 +22,34 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState<string | null>(null)
 
   useEffect(() => {
-    const loadProfile = async () => {
-      if (!session?.user) return
+    if (!session?.user) return
 
-      setIsLoading(true)
-      setError(null)
+    setIsLoading(true)
+    setError(null)
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, avatar_url, created_at")
-        .eq("id", session.user.id)
-        .maybeSingle()
-
+    getProfile(session.user.id).then(({ data, error }) => {
       if (error) {
-        console.error("Error loading profile", error)
+        console.error("Error loading profile:", error)
         setError("Unable to load your profile right now.")
         setIsLoading(false)
         return
       }
 
-      const profileData: Profile =
-        data ?? {
-          id: session.user.id,
-          full_name: (session.user.user_metadata as any)?.full_name ?? session.user.email ?? "",
-          avatar_url: null,
-          created_at: session.user.created_at ?? null,
-        }
+      const profileData: Profile = data ?? {
+        id: session.user.id,
+        full_name:
+          (session.user.user_metadata as { full_name?: string } | null)?.full_name ??
+          session.user.email ??
+          "",
+        avatar_url: null,
+        role: null,
+        trainer_status: null,
+        created_at: session.user.created_at ?? null,
+      }
 
       setProfile(profileData)
       setFullName(profileData.full_name ?? "")
       setAvatarUrl(profileData.avatar_url ?? "")
-      setIsLoading(false)
-    }
-
-    loadProfile().catch((err) => {
-      console.error("Unexpected error loading profile", err)
-      setError("Unable to load your profile right now.")
       setIsLoading(false)
     })
   }, [session])
@@ -76,19 +62,13 @@ export default function ProfilePage() {
     setError(null)
     setSuccess(null)
 
-    const { error } = await supabase
-      .from("profiles")
-      .upsert(
-        {
-          id: session.user.id,
-          full_name: fullName,
-          avatar_url: avatarUrl || null,
-        },
-        { onConflict: "id" }
-      )
+    const { error } = await upsertProfile(session.user.id, {
+      full_name: fullName,
+      avatar_url: avatarUrl || null,
+    })
 
     if (error) {
-      console.error("Error updating profile", error)
+      console.error("Error updating profile:", error)
       setError("Failed to save your profile. Please try again.")
       setIsSaving(false)
       return

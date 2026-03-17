@@ -14,116 +14,51 @@ import {
   Check,
   CheckCheck,
 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth/AuthProvider"
+import { supabase } from "@/lib/supabaseClient"
+import {
+  getConversationMessages,
+  getThreadMessages,
+  sendMessage,
+  markMessagesAsRead,
+  type MessageWithProfiles,
+} from "@/lib/supabase/messages"
+import type { Message } from "@/types/message"
 
-const conversations = [
-  {
-    id: 1,
-    name: "Sarah Miller",
-    specialty: "Weight Loss Specialist",
-    lastMessage: "Great! I'll see you tomorrow at 2pm for our session.",
-    time: "2m ago",
-    unread: 2,
-    online: true
-  },
-  {
-    id: 2,
-    name: "David Park",
-    specialty: "Bodybuilding Coach",
-    lastMessage: "Don't forget to bring your resistance bands!",
-    time: "1h ago",
-    unread: 0,
-    online: true
-  },
-  {
-    id: 3,
-    name: "Emma Roberts",
-    specialty: "CrossFit Trainer",
-    lastMessage: "How did the workout feel today?",
-    time: "3h ago",
-    unread: 0,
-    online: false
-  },
-  {
-    id: 4,
-    name: "Mike Thompson",
-    specialty: "Strength Training",
-    lastMessage: "Here's the training plan I mentioned...",
-    time: "1d ago",
-    unread: 0,
-    online: false
-  },
-  {
-    id: 5,
-    name: "Lisa Chen",
-    specialty: "HIIT & Cardio",
-    lastMessage: "You're making great progress!",
-    time: "2d ago",
-    unread: 0,
-    online: false
-  }
-]
+type ConversationSummary = {
+  partnerId: string
+  partnerName: string
+  partnerAvatar?: string
+  lastMessage: string
+  lastMessageTime: string
+  unreadCount: number
+}
 
-const messages = [
-  {
-    id: 1,
-    sender: "trainer",
-    content: "Hey Alex! How are you feeling after yesterday's session?",
-    time: "10:30 AM",
-    read: true
-  },
-  {
-    id: 2,
-    sender: "user",
-    content: "Hi Sarah! I'm feeling good, just a bit sore in my legs from the squats.",
-    time: "10:32 AM",
-    read: true
-  },
-  {
-    id: 3,
-    sender: "trainer",
-    content: "That's completely normal! It means those muscles are getting stronger. Make sure you're stretching and staying hydrated.",
-    time: "10:35 AM",
-    read: true
-  },
-  {
-    id: 4,
-    sender: "user",
-    content: "Thanks for the tip! I've been drinking lots of water. Quick question - should I be taking any supplements?",
-    time: "10:38 AM",
-    read: true
-  },
-  {
-    id: 5,
-    sender: "trainer",
-    content: "Great question! For your goals, I'd recommend a good quality protein powder and maybe some BCAAs. We can discuss this more in our next session. Speaking of which, are we still on for tomorrow at 2pm?",
-    time: "10:42 AM",
-    read: true
-  },
-  {
-    id: 6,
-    sender: "user",
-    content: "Yes, 2pm works perfectly for me!",
-    time: "11:15 AM",
-    read: true
-  },
-  {
-    id: 7,
-    sender: "trainer",
-    content: "Great! I'll see you tomorrow at 2pm for our session.",
-    time: "11:18 AM",
-    read: true
-  }
-]
+function formatTime(timestamp: string): string {
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diffMins = Math.floor((now.getTime() - date.getTime()) / 60000)
+  if (diffMins < 1) return "just now"
+  if (diffMins < 60) return `${diffMins}m ago`
+  const diffHours = Math.floor(diffMins / 60)
+  if (diffHours < 24) return `${diffHours}h ago`
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffDays < 7) return `${diffDays}d ago`
+  return date.toLocaleDateString()
+}
 
-function ConversationItem({ 
-  conversation, 
-  isSelected, 
-  onClick 
-}: { 
-  conversation: typeof conversations[0]
+function formatMessageTime(timestamp: string): string {
+  return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+}
+
+function ConversationItem({
+  conversation,
+  isSelected,
+  onClick,
+}: {
+  conversation: ConversationSummary
   isSelected: boolean
   onClick: () => void
 }) {
@@ -136,21 +71,26 @@ function ConversationItem({
     >
       <div className="flex items-start gap-3">
         <div className="relative">
-          <div className="w-12 h-12 rounded-full bg-muted" />
-          {conversation.online && (
-            <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-500 border-2 border-background" />
+          {conversation.partnerAvatar ? (
+            <img
+              src={conversation.partnerAvatar}
+              alt={conversation.partnerName}
+              className="w-12 h-12 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-muted" />
           )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
-            <h3 className="font-medium text-foreground truncate">{conversation.name}</h3>
-            <span className="text-xs text-muted-foreground">{conversation.time}</span>
+            <h3 className="font-medium text-foreground truncate">{conversation.partnerName}</h3>
+            <span className="text-xs text-muted-foreground">{conversation.lastMessageTime}</span>
           </div>
           <p className="text-sm text-muted-foreground truncate">{conversation.lastMessage}</p>
         </div>
-        {conversation.unread > 0 && (
+        {conversation.unreadCount > 0 && (
           <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-            <span className="text-xs text-primary-foreground">{conversation.unread}</span>
+            <span className="text-xs text-primary-foreground">{conversation.unreadCount}</span>
           </div>
         )}
       </div>
@@ -158,25 +98,31 @@ function ConversationItem({
   )
 }
 
-function MessageBubble({ message }: { message: typeof messages[0] }) {
-  const isUser = message.sender === "user"
-  
+function MessageBubble({
+  message,
+  currentUserId,
+}: {
+  message: Message
+  currentUserId: string
+}) {
+  const isOwn = message.sender_id === currentUserId
+
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div className={`max-w-[70%] ${isUser ? "order-2" : ""}`}>
+    <div className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
+      <div className={`max-w-[70%] ${isOwn ? "order-2" : ""}`}>
         <div
           className={`px-4 py-2 rounded-2xl ${
-            isUser
+            isOwn
               ? "bg-primary text-primary-foreground rounded-br-md"
               : "bg-secondary text-foreground rounded-bl-md"
           }`}
         >
           <p className="text-sm">{message.content}</p>
         </div>
-        <div className={`flex items-center gap-1 mt-1 ${isUser ? "justify-end" : ""}`}>
-          <span className="text-xs text-muted-foreground">{message.time}</span>
-          {isUser && (
-            message.read 
+        <div className={`flex items-center gap-1 mt-1 ${isOwn ? "justify-end" : ""}`}>
+          <span className="text-xs text-muted-foreground">{formatMessageTime(message.created_at)}</span>
+          {isOwn && (
+            message.is_read
               ? <CheckCheck className="w-3 h-3 text-primary" />
               : <Check className="w-3 h-3 text-muted-foreground" />
           )}
@@ -188,17 +134,161 @@ function MessageBubble({ message }: { message: typeof messages[0] }) {
 
 export default function MessagesPage() {
   const router = useRouter()
-  const { session, loading } = useAuth()
-  const [selectedConversation, setSelectedConversation] = useState(conversations[0])
+  const { session, user, loading } = useAuth()
+  const [conversations, setConversations] = useState<ConversationSummary[]>([])
+  const [selectedConversation, setSelectedConversation] = useState<ConversationSummary | null>(null)
+  const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [showConversations, setShowConversations] = useState(true)
+  const [loadingConversations, setLoadingConversations] = useState(true)
+  const [loadingMessages, setLoadingMessages] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const selectedConversationRef = useRef<ConversationSummary | null>(null)
+
+  useEffect(() => {
+    selectedConversationRef.current = selectedConversation
+  }, [selectedConversation])
 
   useEffect(() => {
     if (!loading && !session) {
       router.replace("/login")
     }
   }, [loading, session, router])
+
+  const fetchConversations = useCallback(async () => {
+    if (!user) return
+    setLoadingConversations(true)
+
+    const { data: rows, error } = await getConversationMessages(user.id)
+
+    if (error) {
+      console.error("Error fetching conversations:", error)
+      setLoadingConversations(false)
+      return
+    }
+
+    // Count unread per partner
+    const unreadCounts = new Map<string, number>()
+    for (const msg of rows) {
+      if (msg.receiver_id === user.id && !msg.is_read) {
+        unreadCounts.set(msg.sender_id, (unreadCounts.get(msg.sender_id) ?? 0) + 1)
+      }
+    }
+
+    // Group by partner — data is DESC so first occurrence per partner is the latest message
+    const partnerMap = new Map<string, ConversationSummary>()
+    for (const msg of rows) {
+      const isOwn = msg.sender_id === user.id
+      const partnerId = isOwn ? msg.receiver_id : msg.sender_id
+      const partner = isOwn ? msg.receiver : msg.sender
+      if (partnerMap.has(partnerId)) continue
+
+      partnerMap.set(partnerId, {
+        partnerId,
+        partnerName: partner?.full_name ?? "Unknown",
+        partnerAvatar: partner?.avatar_url ?? undefined,
+        lastMessage: msg.content,
+        lastMessageTime: formatTime(msg.created_at),
+        unreadCount: unreadCounts.get(partnerId) ?? 0,
+      })
+    }
+
+    setConversations(Array.from(partnerMap.values()))
+    setLoadingConversations(false)
+  }, [user])
+
+  useEffect(() => {
+    fetchConversations()
+  }, [fetchConversations])
+
+  const markAsRead = useCallback(async (partnerId: string) => {
+    if (!user) return
+    const { error } = await markMessagesAsRead(user.id, partnerId)
+    if (error) console.error("Error marking messages as read:", error)
+  }, [user])
+
+  const fetchMessages = useCallback(async (partnerId: string) => {
+    if (!user) return
+    setLoadingMessages(true)
+
+    const { data, error } = await getThreadMessages(user.id, partnerId)
+
+    if (error) {
+      console.error("Error fetching messages:", error)
+    } else {
+      setMessages(data)
+    }
+    setLoadingMessages(false)
+  }, [user])
+
+  const handleSelectConversation = useCallback(async (conv: ConversationSummary) => {
+    setSelectedConversation(conv)
+    setShowConversations(false)
+    await fetchMessages(conv.partnerId)
+    await markAsRead(conv.partnerId)
+    setConversations(prev =>
+      prev.map(c => c.partnerId === conv.partnerId ? { ...c, unreadCount: 0 } : c)
+    )
+  }, [fetchMessages, markAsRead])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  // Realtime subscription for incoming messages
+  useEffect(() => {
+    if (!user) return
+
+    const channel = supabase
+      .channel(`messages-realtime-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `receiver_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const incoming = payload.new as Message
+          const active = selectedConversationRef.current
+
+          if (active && incoming.sender_id === active.partnerId) {
+            setMessages(prev => [...prev, incoming])
+            markAsRead(active.partnerId)
+          }
+
+          fetchConversations()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user, fetchConversations, markAsRead])
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !user || !selectedConversation) return
+
+    const content = newMessage.trim()
+    setNewMessage("")
+
+    const { data, error } = await sendMessage({
+      sender_id: user.id,
+      receiver_id: selectedConversation.partnerId,
+      content,
+    })
+
+    if (error) {
+      console.error("Error sending message:", error)
+      return
+    }
+
+    if (data) setMessages(prev => [...prev, data])
+    fetchConversations()
+  }
 
   if (loading || (!session && typeof window !== "undefined")) {
     return (
@@ -209,27 +299,21 @@ export default function MessagesPage() {
   }
 
   const filteredConversations = conversations.filter(c =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+    c.partnerName.toLowerCase().includes(searchQuery.toLowerCase())
   )
-
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      setNewMessage("")
-    }
-  }
 
   return (
     <div className="h-screen bg-background flex flex-col">
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border lg:hidden">
         <div className="px-4 h-16 flex items-center justify-between">
-          {!showConversations ? (
+          {!showConversations && selectedConversation ? (
             <>
               <button onClick={() => setShowConversations(true)} className="flex items-center gap-2 text-foreground">
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-secondary" />
-                <span className="font-medium text-foreground">{selectedConversation.name}</span>
+                <span className="font-medium text-foreground">{selectedConversation.partnerName}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="icon">
@@ -267,7 +351,7 @@ export default function MessagesPage() {
                 <span className="text-lg font-bold text-foreground">Messages</span>
               </Link>
             </div>
-            
+
             <div className="p-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -281,17 +365,20 @@ export default function MessagesPage() {
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              {filteredConversations.map((conversation) => (
-                <ConversationItem
-                  key={conversation.id}
-                  conversation={conversation}
-                  isSelected={selectedConversation.id === conversation.id}
-                  onClick={() => {
-                    setSelectedConversation(conversation)
-                    setShowConversations(false)
-                  }}
-                />
-              ))}
+              {loadingConversations ? (
+                <div className="p-4 text-center text-muted-foreground text-sm">Loading conversations...</div>
+              ) : filteredConversations.length === 0 ? (
+                <div className="p-4 text-center text-muted-foreground text-sm">No conversations yet</div>
+              ) : (
+                filteredConversations.map((conversation) => (
+                  <ConversationItem
+                    key={conversation.partnerId}
+                    conversation={conversation}
+                    isSelected={selectedConversation?.partnerId === conversation.partnerId}
+                    onClick={() => handleSelectConversation(conversation)}
+                  />
+                ))
+              )}
             </div>
           </div>
         </aside>
@@ -300,59 +387,81 @@ export default function MessagesPage() {
           flex-1 flex flex-col
           ${showConversations ? "hidden lg:flex" : "flex"}
         `}>
-          <div className="hidden lg:flex items-center justify-between p-4 border-b border-border">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="w-10 h-10 rounded-full bg-secondary" />
-                {selectedConversation.online && (
-                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-background" />
+          {selectedConversation ? (
+            <>
+              <div className="hidden lg:flex items-center justify-between p-4 border-b border-border">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    {selectedConversation.partnerAvatar ? (
+                      <img
+                        src={selectedConversation.partnerAvatar}
+                        alt={selectedConversation.partnerName}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-secondary" />
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="font-medium text-foreground">{selectedConversation.partnerName}</h2>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon">
+                    <Phone className="w-5 h-5 text-muted-foreground" />
+                  </Button>
+                  <Button variant="ghost" size="icon">
+                    <Video className="w-5 h-5 text-muted-foreground" />
+                  </Button>
+                  <Button variant="ghost" size="icon">
+                    <MoreVertical className="w-5 h-5 text-muted-foreground" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {loadingMessages ? (
+                  <div className="flex items-center justify-center h-full">
+                    <span className="text-muted-foreground text-sm">Loading messages...</span>
+                  </div>
+                ) : (
+                  <>
+                    {messages.map((message) => (
+                      <MessageBubble
+                        key={message.id}
+                        message={message}
+                        currentUserId={user!.id}
+                      />
+                    ))}
+                    <div ref={messagesEndRef} />
+                  </>
                 )}
               </div>
-              <div>
-                <h2 className="font-medium text-foreground">{selectedConversation.name}</h2>
-                <p className="text-sm text-muted-foreground">{selectedConversation.specialty}</p>
+
+              <div className="p-4 border-t border-border">
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="Type a message..."
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                    className="flex-1 bg-input border-border"
+                  />
+                  <Button
+                    onClick={handleSendMessage}
+                    disabled={!newMessage.trim()}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-muted-foreground text-sm">Select a conversation to start messaging</p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon">
-                <Phone className="w-5 h-5 text-muted-foreground" />
-              </Button>
-              <Button variant="ghost" size="icon">
-                <Video className="w-5 h-5 text-muted-foreground" />
-              </Button>
-              <Button variant="ghost" size="icon">
-                <MoreVertical className="w-5 h-5 text-muted-foreground" />
-              </Button>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <div className="text-center">
-              <span className="text-xs text-muted-foreground bg-secondary px-3 py-1 rounded-full">Today</span>
-            </div>
-            {messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
-            ))}
-          </div>
-
-          <div className="p-4 border-t border-border">
-            <div className="flex items-center gap-2">
-              <Input
-                placeholder="Type a message..."
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                className="flex-1 bg-input border-border"
-              />
-              <Button 
-                onClick={handleSendMessage}
-                disabled={!newMessage.trim()}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <Send className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
+          )}
         </div>
       </main>
     </div>

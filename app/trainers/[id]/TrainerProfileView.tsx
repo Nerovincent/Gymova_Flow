@@ -17,28 +17,11 @@ import {
   Share2,
   Dumbbell
 } from "lucide-react"
-
-export type TrainerProfileData = {
-  id: string | number
-  name: string
-  specialty: string
-  rating: number
-  reviews: number
-  price: number
-  location: string
-  distance: string
-  bio: string
-  specializations: string[]
-  certifications: string[]
-  experience: string
-  clientsHelped: number
-  availability: Record<string, string[]>
-  reviewsList: { id: number; name: string; rating: number; date: string; comment: string }[]
-}
+import type { Trainer } from "@/types/trainer"
 
 const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const
 
-export function TrainerProfileView({ trainer }: { trainer: TrainerProfileData }) {
+export function TrainerProfileView({ trainer }: { trainer: Trainer }) {
   return (
     <div className="min-h-screen bg-background">
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
@@ -168,10 +151,10 @@ export function TrainerProfileView({ trainer }: { trainer: TrainerProfileData })
                     </div>
                   </div>
 
-                  {trainer.reviewsList.length === 0 ? (
+                  {trainer.reviews_list.length === 0 ? (
                     <p className="text-muted-foreground">No reviews yet.</p>
                   ) : (
-                    trainer.reviewsList.map((review) => (
+                    trainer.reviews_list.map((review) => (
                       <Card key={review.id} className="bg-card border-border">
                         <CardContent className="p-6">
                           <div className="flex items-start justify-between mb-3">
@@ -269,7 +252,7 @@ export function TrainerProfileView({ trainer }: { trainer: TrainerProfileData })
 
                     <div className="flex items-center justify-center gap-2 pt-2 text-sm text-muted-foreground">
                       <Dumbbell className="w-4 h-4" />
-                      <span>{trainer.clientsHelped}+ clients trained</span>
+                      <span>{trainer.clients_helped}+ clients trained</span>
                     </div>
                   </CardContent>
                 </Card>

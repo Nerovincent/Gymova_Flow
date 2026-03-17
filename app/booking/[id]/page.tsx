@@ -17,7 +17,7 @@ import {
   Loader2
 } from "lucide-react"
 import { useState } from "react"
-import { supabase } from "@/lib/supabaseClient"
+import { createBooking } from "@/lib/supabase/bookings"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { useToast } from "@/hooks/use-toast"
 
@@ -175,7 +175,7 @@ export default function BookingPage() {
     const startTime = parseTimeTo24h(selectedTime)
     const endTime = addOneHour(selectedTime)
 
-    const { error } = await supabase.from("bookings").insert({
+    const { error } = await createBooking({
       client_id: user.id,
       trainer_id: trainer.id,
       booking_date: selectedDate,
@@ -188,7 +188,7 @@ export default function BookingPage() {
     setIsSubmitting(false)
 
     if (error) {
-      setBookingError(error.message || "Failed to create booking. Please try again.")
+      setBookingError(error || "Failed to create booking. Please try again.")
       return
     }
 

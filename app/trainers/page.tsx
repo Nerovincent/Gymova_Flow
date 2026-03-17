@@ -25,9 +25,10 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
-import { supabase } from "@/lib/supabaseClient"
+import { getTrainers } from "@/lib/supabase/trainers"
+import type { TrainerListItem } from "@/types/trainer"
 
-const trainers = [
+const trainers: TrainerListItem[] = [
   {
     id: 1,
     name: "Sarah Miller",
@@ -232,7 +233,7 @@ function FilterSidebar({
   )
 }
 
-function TrainerCard({ trainer }: { trainer: typeof trainers[0] }) {
+function TrainerCard({ trainer }: { trainer: TrainerListItem }) {
   return (
     <Link href={`/trainers/${trainer.id}`}>
       <Card className="bg-card border-border hover:border-primary/50 transition-colors h-full">
@@ -288,43 +289,22 @@ export default function TrainersPage() {
   const [priceRange, setPriceRange] = useState([0, 150])
   const [selectedSpecs, setSelectedSpecs] = useState<string[]>([])
   const [minRating, setMinRating] = useState(0)
-  const [trainerList, setTrainerList] = useState(trainers)
+  const [trainerList, setTrainerList] = useState<TrainerListItem[]>(trainers)
   const [mounted, setMounted] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
   useEffect(() => {
-    const fetchTrainers = async () => {
-      const { data, error } = await supabase
-        .from("trainers")
-        .select("id, name, specialty, rating, reviews, price, location, distance, specializations")
-
+    getTrainers().then(({ data, error }) => {
       if (error) {
-        console.error("Error loading trainers from Supabase", error)
+        console.error("Error loading trainers from Supabase:", error)
+        setLoadError("Could not load trainers. Showing demo data.")
         return
       }
-
-      if (data) {
-        const mapped = data.map((t: any) => ({
-          id: t.id,
-          name: t.name,
-          specialty: t.specialty,
-          rating: t.rating ?? 0,
-          reviews: t.reviews ?? 0,
-          price: t.price ?? 0,
-          location: t.location ?? "",
-          distance: t.distance ?? "",
-          specializations: t.specializations ?? [],
-        }))
-
-        setTrainerList(mapped)
-      }
-    }
-
-    fetchTrainers().catch((err) => {
-      console.error("Unexpected error loading trainers", err)
+      if (data.length > 0) setTrainerList(data)
     })
   }, [])
 
@@ -368,6 +348,12 @@ export default function TrainersPage() {
             <h1 className="text-3xl font-bold text-foreground mb-2">Find Your Perfect Trainer</h1>
             <p className="text-muted-foreground">Discover certified personal trainers near you</p>
           </div>
+
+          {loadError && (
+            <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-600">
+              {loadError}
+            </div>
+          )}
 
           <div className="flex flex-col lg:flex-row gap-8">
             <aside className="hidden lg:block w-72 flex-shrink-0">

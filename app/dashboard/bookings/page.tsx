@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { supabase } from "@/lib/supabaseClient"
+import { getClientBookings } from "@/lib/supabase/bookings"
 import { useAuth } from "@/components/auth/AuthProvider"
 import type { BookingWithTrainer } from "@/types/booking"
 
@@ -135,32 +135,10 @@ export default function BookingsPage() {
   useEffect(() => {
     if (!user) return
 
-    const fetchBookings = async () => {
-      setLoading(true)
-      setError(null)
+    setLoading(true)
+    setError(null)
 
-      const { data, error: fetchError } = await supabase
-        .from("bookings")
-        .select(`
-          id,
-          client_id,
-          trainer_id,
-          booking_date,
-          start_time,
-          end_time,
-          status,
-          goal_note,
-          created_at,
-          trainers (
-            id,
-            name,
-            specialty,
-            location
-          )
-        `)
-        .eq("client_id", user.id)
-        .order("booking_date", { ascending: false })
-
+    getClientBookings(user.id).then(({ data, error: fetchError }) => {
       setLoading(false)
 
       if (fetchError) {
@@ -168,21 +146,18 @@ export default function BookingsPage() {
         return
       }
 
-      const all = (data ?? []) as unknown as BookingWithTrainer[]
       setUpcomingBookings(
-        all
+        data
           .filter((b) => UPCOMING_STATUSES.includes(b.status))
           .sort((a, b) => a.booking_date.localeCompare(b.booking_date))
           .map(mapToDisplay)
       )
       setPastBookings(
-        all
+        data
           .filter((b) => PAST_STATUSES.includes(b.status))
           .map(mapToDisplay)
       )
-    }
-
-    fetchBookings()
+    })
   }, [user])
 
   if (loading) {
