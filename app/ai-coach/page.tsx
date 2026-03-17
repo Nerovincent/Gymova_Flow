@@ -15,9 +15,93 @@ import {
   Users,
   RefreshCw,
 } from "lucide-react"
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useState, useRef } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/components/auth/AuthProvider"
+
+// Lightweight markdown renderer: bold, headers, unordered lists
+function MarkdownContent({ text, className }: { text: string; className?: string }) {
+  const lines = text.split("\n")
+  const elements: React.ReactNode[] = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+
+    // H3 ###
+    if (line.startsWith("### ")) {
+      elements.push(
+        <p key={i} className="font-semibold mt-3 mb-1">
+          {renderInline(line.slice(4))}
+        </p>
+      )
+    }
+    // H2 ##
+    else if (line.startsWith("## ")) {
+      elements.push(
+        <p key={i} className="font-bold mt-4 mb-1">
+          {renderInline(line.slice(3))}
+        </p>
+      )
+    }
+    // H1 #
+    else if (line.startsWith("# ")) {
+      elements.push(
+        <p key={i} className="font-bold text-base mt-4 mb-1">
+          {renderInline(line.slice(2))}
+        </p>
+      )
+    }
+    // Unordered list - or *
+    else if (/^[-*] /.test(line)) {
+      elements.push(
+        <div key={i} className="flex gap-2 my-0.5">
+          <span className="shrink-0 mt-px">•</span>
+          <span>{renderInline(line.slice(2))}</span>
+        </div>
+      )
+    }
+    // Numbered list
+    else if (/^\d+\. /.test(line)) {
+      const match = line.match(/^(\d+)\. (.*)$/)
+      if (match) {
+        elements.push(
+          <div key={i} className="flex gap-2 my-0.5">
+            <span className="shrink-0 mt-px">{match[1]}.</span>
+            <span>{renderInline(match[2])}</span>
+          </div>
+        )
+      }
+    }
+    // Empty line = spacer
+    else if (line.trim() === "") {
+      elements.push(<div key={i} className="h-2" />)
+    }
+    // Normal paragraph
+    else {
+      elements.push(
+        <p key={i} className="my-0.5">
+          {renderInline(line)}
+        </p>
+      )
+    }
+  }
+
+  return <div className={`text-sm leading-relaxed ${className ?? ""}`}>{elements}</div>
+}
+
+function renderInline(text: string): React.ReactNode {
+  // Handle **bold** and *italic*
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g)
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>
+    }
+    if (part.startsWith("*") && part.endsWith("*")) {
+      return <em key={i}>{part.slice(1, -1)}</em>
+    }
+    return part
+  })
+}
 
 const examplePrompts = [
   {
@@ -52,16 +136,29 @@ const initialMessages: Message[] = []
 
 export default function AICoachPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { session, loading } = useAuth()
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const sentInitialRef = useRef(false)
 
   useEffect(() => {
     if (!loading && !session) {
       router.replace("/login")
     }
   }, [loading, session, router])
+
+  // Auto-send query from ?q= param (e.g. from dashboard quick-send)
+  useEffect(() => {
+    if (loading || !session || sentInitialRef.current) return
+    const q = searchParams?.get("q")
+    if (q) {
+      sentInitialRef.current = true
+      handleSend(q)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, session, searchParams])
 
   if (loading || (!session && typeof window !== "undefined")) {
     return (
@@ -77,157 +174,39 @@ export default function AICoachPage() {
     const userMessage: Message = {
       id: Date.now(),
       role: "user",
-      content: message
+      content: message,
     }
 
-    setMessages((prev) => [...prev, userMessage])
+    const newMessages = [...messages, userMessage]
+    setMessages(newMessages)
     setInput("")
     setIsLoading(true)
 
-    // Simulate AI response
-    setTimeout(() => {
-      const responses: Record<string, string> = {
-        "Create a beginner workout routine for building muscle": `Great! Here's a beginner-friendly muscle-building routine:
-
-**3-Day Split Program**
-
-**Day 1 - Push (Chest, Shoulders, Triceps)**
-- Bench Press: 3 sets x 8-10 reps
-- Shoulder Press: 3 sets x 10 reps
-- Incline Dumbbell Press: 3 sets x 10 reps
-- Tricep Dips: 3 sets x 12 reps
-- Lateral Raises: 3 sets x 12 reps
-
-**Day 2 - Pull (Back, Biceps)**
-- Pull-ups or Lat Pulldown: 3 sets x 8-10 reps
-- Barbell Rows: 3 sets x 10 reps
-- Face Pulls: 3 sets x 12 reps
-- Bicep Curls: 3 sets x 12 reps
-- Hammer Curls: 3 sets x 12 reps
-
-**Day 3 - Legs**
-- Squats: 4 sets x 8-10 reps
-- Romanian Deadlifts: 3 sets x 10 reps
-- Leg Press: 3 sets x 12 reps
-- Leg Curls: 3 sets x 12 reps
-- Calf Raises: 4 sets x 15 reps
-
-Rest 1-2 minutes between sets. Train 3 days per week with rest days in between. Would you like me to recommend a trainer who can help you perfect your form?`,
-
-        "Help me create a plan to lose 10 pounds in 2 months": `Here's a sustainable plan to lose 10 pounds in 2 months:
-
-**Nutrition Guidelines**
-- Create a 500 calorie deficit daily (leads to ~1 lb/week loss)
-- Aim for 0.8-1g protein per pound of body weight
-- Eat plenty of vegetables and fiber
-- Stay hydrated (aim for 8+ glasses of water daily)
-- Limit processed foods and added sugars
-
-**Exercise Plan**
-- 3-4 strength training sessions per week
-- 2-3 cardio sessions (30-45 min each)
-- Daily 10,000 steps
-
-**Weekly Schedule Example**
-- Monday: Strength (Full Body)
-- Tuesday: HIIT Cardio (20 min)
-- Wednesday: Rest or Light Walk
-- Thursday: Strength (Full Body)
-- Friday: Steady-State Cardio (45 min)
-- Saturday: Strength (Full Body)
-- Sunday: Active Recovery
-
-**Tips for Success**
-- Track your food intake
-- Sleep 7-9 hours per night
-- Take progress photos weekly
-- Be patient and consistent
-
-Would you like me to connect you with a weight loss specialist trainer?`,
-
-        "Suggest trainers for muscle gain and strength training": `Based on your goal of muscle gain and strength training, I recommend these trainers:
-
-**1. David Park - Bodybuilding Coach**
-⭐ 4.8 (89 reviews) | $85/session
-Specializes in: Bodybuilding, Strength Training, Muscle Hypertrophy
-Location: 1.2 miles away
-"Former competitive bodybuilder with 10+ years of coaching experience."
-
-**2. Mike Thompson - Strength & Conditioning**
-⭐ 4.7 (98 reviews) | $70/session
-Specializes in: Strength Training, Athletic Performance
-Location: 2.0 miles away
-"Certified strength coach focused on building raw strength."
-
-**3. Sarah Miller - Weight Loss & Muscle Toning**
-⭐ 4.9 (124 reviews) | $75/session
-Specializes in: Weight Loss, HIIT, Nutrition
-Location: 0.8 miles away
-"Great for beginners looking to build lean muscle."
-
-Would you like me to help you book a session with any of these trainers?`,
-
-        "What are the best exercises for building core strength?": `Here are the best exercises for building core strength:
-
-**Beginner Core Exercises**
-1. **Dead Bug** - 3 sets x 10 reps each side
-   - Great for learning core bracing
-   
-2. **Plank** - 3 sets x 30-60 seconds
-   - Foundation of core stability
-   
-3. **Bird Dog** - 3 sets x 10 reps each side
-   - Improves balance and coordination
-
-**Intermediate Exercises**
-4. **Hollow Body Hold** - 3 sets x 20-30 seconds
-   - Builds anterior core strength
-   
-5. **Pallof Press** - 3 sets x 10 reps each side
-   - Anti-rotation strength
-   
-6. **Ab Wheel Rollout** - 3 sets x 8-10 reps
-   - Advanced core stability
-
-**Advanced Exercises**
-7. **Hanging Leg Raises** - 3 sets x 10-12 reps
-8. **L-Sit** - 3 sets x 15-20 seconds
-9. **Dragon Flag** - 3 sets x 5-8 reps
-
-**Pro Tips:**
-- Focus on quality over quantity
-- Breathe properly - exhale on exertion
-- Don't neglect obliques and lower back
-- Train core 2-3 times per week
-
-Want me to create a complete core workout program for you?`
-      }
-
-      const defaultResponse = `I'd be happy to help you with that! Here are some thoughts:
-
-Based on your question, I recommend:
-
-1. **Start with a clear goal** - Define what success looks like for you
-2. **Create a consistent schedule** - Consistency beats intensity
-3. **Track your progress** - What gets measured gets improved
-4. **Consider working with a trainer** - Expert guidance accelerates results
-
-Would you like me to:
-- Create a personalized workout plan?
-- Recommend trainers in your area?
-- Provide nutrition guidance?
-
-Just let me know how I can help further!`
-
-      const assistantMessage: Message = {
-        id: Date.now() + 1,
-        role: "assistant",
-        content: responses[message] || defaultResponse
-      }
-
-      setMessages((prev) => [...prev, assistantMessage])
+    try {
+      const res = await fetch("/api/ai-coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
+        }),
+      })
+      const { reply } = await res.json()
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now() + 1, role: "assistant", content: reply },
+      ])
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          role: "assistant",
+          content: "Sorry, I had trouble connecting. Please try again.",
+        },
+      ])
+    } finally {
       setIsLoading(false)
-    }, 1500)
+    }
   }
 
   const handleExampleClick = (prompt: string) => {
@@ -302,9 +281,16 @@ Just let me know how I can help further!`
                   <div className={`max-w-[80%] ${message.role === "user" ? "order-1" : ""}`}>
                     <Card className={`${message.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border-border"}`}>
                       <CardContent className="p-4">
-                        <p className={`text-sm whitespace-pre-wrap ${message.role === "user" ? "text-primary-foreground" : "text-card-foreground"}`}>
-                          {message.content}
-                        </p>
+                        {message.role === "assistant" ? (
+                          <MarkdownContent
+                            text={message.content}
+                            className="text-card-foreground"
+                          />
+                        ) : (
+                          <p className="text-sm whitespace-pre-wrap text-primary-foreground">
+                            {message.content}
+                          </p>
+                        )}
                       </CardContent>
                     </Card>
                   </div>

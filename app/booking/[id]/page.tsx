@@ -16,42 +16,39 @@ import {
   Star,
   Loader2
 } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { createBooking } from "@/lib/supabase/bookings"
+import { getTrainerById } from "@/lib/supabase/trainers"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { useToast } from "@/hooks/use-toast"
+import type { Trainer } from "@/types/trainer"
 
-const trainers: Record<string, { id: number; name: string; specialty: string; rating: number; price: number; location: string }> = {
-  "1": {
-    id: 1,
-    name: "Sarah Miller",
-    specialty: "Weight Loss Specialist",
-    rating: 4.9,
-    price: 75,
-    location: "Downtown Fitness Center"
-  },
-  "2": {
-    id: 2,
-    name: "David Park",
-    specialty: "Bodybuilding Coach",
-    rating: 4.8,
-    price: 85,
-    location: "Iron Paradise Gym"
+const DAY_INDEX_TO_NAME = [
+  "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
+] as const
+
+function getAvailableDatesFromSchedule(
+  availability: Record<string, string[]>,
+  daysAhead = 30
+): Record<string, string[]> {
+  const result: Record<string, string[]> = {}
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  for (let i = 1; i <= daysAhead; i++) {
+    const date = new Date(today)
+    date.setDate(today.getDate() + i)
+    const dayName = DAY_INDEX_TO_NAME[date.getDay()]
+    const slots = availability[dayName] ?? []
+    if (slots.length > 0) {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, "0")
+      const day = String(date.getDate()).padStart(2, "0")
+      result[`${year}-${month}-${day}`] = slots
+    }
   }
-}
 
-const defaultTrainer = trainers["1"]
-
-const availableSlots: Record<string, string[]> = {
-  "2026-03-07": ["9:00 AM", "10:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"],
-  "2026-03-08": ["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM"],
-  "2026-03-09": [],
-  "2026-03-10": ["9:00 AM", "10:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"],
-  "2026-03-11": ["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM"],
-  "2026-03-12": ["9:00 AM", "10:00 AM", "2:00 PM", "3:00 PM"],
-  "2026-03-13": ["10:00 AM", "11:00 AM"],
-  "2026-03-14": ["9:00 AM", "10:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"],
-  "2026-03-15": ["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM"]
+  return result
 }
 
 function generateCalendarDays(year: number, month: number) {
@@ -96,10 +93,29 @@ export default function BookingPage() {
   const { toast } = useToast()
 
   const trainerId = params.id as string
-  const trainer = trainers[trainerId] || defaultTrainer
-  
-  const [currentMonth, setCurrentMonth] = useState(2)
-  const [currentYear, setCurrentYear] = useState(2026)
+
+  const [trainer, setTrainer] = useState<Trainer | null>(null)
+  const [trainerLoading, setTrainerLoading] = useState(true)
+  const [trainerError, setTrainerError] = useState<string | null>(null)
+  const [availableSlots, setAvailableSlots] = useState<Record<string, string[]>>({})
+
+  useEffect(() => {
+    if (!trainerId) return
+    setTrainerLoading(true)
+    getTrainerById(trainerId).then(({ data, error }) => {
+      if (error || !data) {
+        setTrainerError(error ?? "Trainer not found.")
+      } else {
+        setTrainer(data)
+        setAvailableSlots(getAvailableDatesFromSchedule(data.availability))
+      }
+      setTrainerLoading(false)
+    })
+  }, [trainerId])
+
+  const today = new Date()
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth())
+  const [currentYear, setCurrentYear] = useState(today.getFullYear())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
   const [goalNote, setGoalNote] = useState("")
@@ -168,6 +184,10 @@ export default function BookingPage() {
       setBookingError("Please select a date and time.")
       return
     }
+    if (!trainer) {
+      setBookingError("Trainer data is not available.")
+      return
+    }
 
     setIsSubmitting(true)
     setBookingError(null)
@@ -175,9 +195,11 @@ export default function BookingPage() {
     const startTime = parseTimeTo24h(selectedTime)
     const endTime = addOneHour(selectedTime)
 
+    const trainerId = typeof trainer.id === "string" ? parseInt(trainer.id, 10) : trainer.id
+
     const { error } = await createBooking({
       client_id: user.id,
-      trainer_id: trainer.id,
+      trainer_id: trainerId,
       booking_date: selectedDate,
       start_time: startTime,
       end_time: endTime,
@@ -204,7 +226,7 @@ export default function BookingPage() {
     <div className="min-h-screen bg-background">
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link href={`/trainers/${trainer.id}`} className="flex items-center gap-2 text-foreground hover:text-primary transition-colors">
+          <Link href={trainer ? `/trainers/${trainer.id}` : "/trainers"} className="flex items-center gap-2 text-foreground hover:text-primary transition-colors">
             <ArrowLeft className="w-5 h-5" />
             <span className="hidden sm:inline">Back to Profile</span>
           </Link>
@@ -218,8 +240,21 @@ export default function BookingPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <h1 className="text-2xl font-bold text-foreground mb-8">Book a Session</h1>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
+          {trainerLoading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          )}
+
+          {trainerError && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              {trainerError}
+            </div>
+          )}
+
+          {!trainerLoading && !trainerError && trainer && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2 space-y-6">
               {step === 1 && (
                 <>
                   <Card className="bg-card border-border">
@@ -448,7 +483,8 @@ export default function BookingPage() {
                 </Card>
               </div>
             </div>
-          </div>
+            </div>
+          )}
         </div>
       </main>
     </div>
