@@ -21,6 +21,7 @@ import { createBooking } from "@/lib/supabase/bookings"
 import { getTrainerById } from "@/lib/supabase/trainers"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { useToast } from "@/hooks/use-toast"
+<<<<<<< HEAD
 import type { Trainer } from "@/types/trainer"
 
 const DAY_INDEX_TO_NAME = [
@@ -50,6 +51,11 @@ function getAvailableDatesFromSchedule(
 
   return result
 }
+=======
+import { getTrainerById } from "@/lib/supabase/trainers"
+import { getTrainerAvailability } from "@/lib/supabase/availability"
+import type { TrainerListItem } from "@/types/trainer"
+>>>>>>> 48bb6a5 (Refactor BookingPage to fetch trainer data and availability from Supabase, and implement dynamic slot generation)
 
 function generateCalendarDays(year: number, month: number) {
   const firstDay = new Date(year, month, 1)
@@ -93,6 +99,7 @@ export default function BookingPage() {
   const { toast } = useToast()
 
   const trainerId = params.id as string
+<<<<<<< HEAD
 
   const [trainer, setTrainer] = useState<Trainer | null>(null)
   const [trainerLoading, setTrainerLoading] = useState(true)
@@ -116,6 +123,26 @@ export default function BookingPage() {
   const today = new Date()
   const [currentMonth, setCurrentMonth] = useState(today.getMonth())
   const [currentYear, setCurrentYear] = useState(today.getFullYear())
+=======
+  const [trainer, setTrainer] = useState<TrainerListItem | null>(null)
+  const [availability, setAvailability] = useState<Record<string, string[]>>({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    getTrainerById(trainerId).then(({ data }) => {
+      if (data) setTrainer(data)
+      setLoading(false)
+    })
+    // Optionally, fetch availability if needed for booking slots
+    getTrainerAvailability(trainerId).then(({ data }) => {
+      setAvailability(data)
+    })
+  }, [trainerId])
+  
+  const [currentMonth, setCurrentMonth] = useState(2)
+  const [currentYear, setCurrentYear] = useState(2026)
+>>>>>>> 48bb6a5 (Refactor BookingPage to fetch trainer data and availability from Supabase, and implement dynamic slot generation)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
   const [goalNote, setGoalNote] = useState("")
@@ -132,6 +159,28 @@ export default function BookingPage() {
     const dayStr = String(day).padStart(2, "0")
     return `${currentYear}-${month}-${dayStr}`
   }
+
+  // Helper to generate available slots for the next 30 days based on weekly schedule
+  function getAvailableDatesFromSchedule(
+    availability: Record<string, string[]>,
+    daysAhead = 30
+  ): Record<string, string[]> {
+    const result: Record<string, string[]> = {}
+    const today = new Date()
+    for (let i = 1; i <= daysAhead; i++) {
+      const d = new Date(today)
+      d.setDate(today.getDate() + i)
+      const dow = d.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase()
+      const slots = availability[dow] || []
+      if (slots.length > 0) {
+        const key = d.toISOString().split("T")[0]
+        result[key] = slots
+      }
+    }
+    return result
+  }
+
+  const availableSlots = getAvailableDatesFromSchedule(availability)
 
   const isDateAvailable = (day: number | null) => {
     if (!day) return false
@@ -199,7 +248,11 @@ export default function BookingPage() {
 
     const { error } = await createBooking({
       client_id: user.id,
+<<<<<<< HEAD
       trainer_id: trainerId,
+=======
+      trainer_id: typeof trainer?.id === 'string' ? parseInt(trainer.id, 10) : trainer?.id,
+>>>>>>> 48bb6a5 (Refactor BookingPage to fetch trainer data and availability from Supabase, and implement dynamic slot generation)
       booking_date: selectedDate,
       start_time: startTime,
       end_time: endTime,
