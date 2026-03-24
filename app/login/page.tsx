@@ -47,7 +47,15 @@ export default function LoginPage() {
   useEffect(() => {
     if (typeof window === "undefined") return
     const params = new URLSearchParams(window.location.search)
-    setResetSuccess(params.get("reset") === "success")
+    const isResetSuccess = params.get("reset") === "success"
+    setResetSuccess(isResetSuccess)
+
+    if (isResetSuccess) {
+      params.delete("reset")
+      const nextQuery = params.toString()
+      const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`
+      window.history.replaceState({}, "", nextUrl)
+    }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
