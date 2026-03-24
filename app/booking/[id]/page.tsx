@@ -23,7 +23,7 @@ import { useToast } from "@/hooks/use-toast"
 import { getTrainerAvailability } from "@/lib/supabase/availability"
 import { createBooking } from "@/lib/supabase/bookings"
 import { getTrainerById } from "@/lib/supabase/trainers"
-import type { TrainerListItem } from "@/types/trainer"
+import type { Trainer, TrainerListItem } from "@/types/trainer"
 
 const MONTH_NAMES = [
   "January",
@@ -158,6 +158,7 @@ export default function BookingPage() {
   const trainerId = params.id
 
   const [trainer, setTrainer] = useState<TrainerListItem | null>(null)
+  const [trainerOwnerUserId, setTrainerOwnerUserId] = useState<string | null>(null)
   const [trainerLoading, setTrainerLoading] = useState(true)
   const [trainerError, setTrainerError] = useState<string | null>(null)
 
@@ -193,6 +194,7 @@ export default function BookingPage() {
         setTrainer(null)
       } else {
         setTrainer(data)
+        setTrainerOwnerUserId((data as Trainer).user_id)
       }
 
       setTrainerLoading(false)
@@ -209,14 +211,14 @@ export default function BookingPage() {
     let cancelled = false
 
     async function loadAvailability() {
-      if (!trainer?.user_id) {
+      if (!trainerOwnerUserId) {
         setAvailability({})
         setAvailabilityLoading(false)
         return
       }
 
       setAvailabilityLoading(true)
-      const { data } = await getTrainerAvailability(trainer.user_id)
+      const { data } = await getTrainerAvailability(trainerOwnerUserId)
       if (!cancelled) {
         setAvailability(data)
         setAvailabilityLoading(false)
@@ -228,7 +230,7 @@ export default function BookingPage() {
     return () => {
       cancelled = true
     }
-  }, [trainer])
+  }, [trainerOwnerUserId])
 
   const days = useMemo(
     () => generateCalendarDays(currentYear, currentMonth),
