@@ -171,39 +171,25 @@ export default function AICoachPage() {
   const handleSend = async (message: string) => {
     if (!message.trim()) return
 
-    const userMessage: Message = {
-      id: Date.now(),
-      role: "user",
-      content: message,
-    }
-
-    const newMessages = [...messages, userMessage]
+    const userMsg: Message = { id: Date.now(), role: "user", content: message }
+    const newMessages = [...messages, userMsg]
     setMessages(newMessages)
     setInput("")
     setIsLoading(true)
-
     try {
       const res = await fetch("/api/ai-coach", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
-        }),
+        body: JSON.stringify({ messages: newMessages.map((m) => ({ role: m.role, content: m.content })) }),
       })
       const { reply } = await res.json()
-      setMessages((prev) => [
-        ...prev,
-        { id: Date.now() + 1, role: "assistant", content: reply },
-      ])
+      setMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: reply }])
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          role: "assistant",
-          content: "Sorry, I had trouble connecting. Please try again.",
-        },
-      ])
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        role: "assistant",
+        content: "Sorry, I had trouble connecting. Please try again.",
+      }])
     } finally {
       setIsLoading(false)
     }
