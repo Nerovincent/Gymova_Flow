@@ -36,97 +36,6 @@ import {
 import { getTrainers } from "@/lib/supabase/trainers"
 import type { TrainerListItem } from "@/types/trainer"
 
-const trainers: TrainerListItem[] = [
-  {
-    id: 1,
-    name: "Sarah Miller",
-    specialty: "Weight Loss Specialist",
-    rating: 4.9,
-    reviews: 124,
-    price: 75,
-    location: "Downtown, San Francisco",
-    distance: "0.8 miles",
-    specializations: ["Weight Loss", "HIIT", "Nutrition"]
-  },
-  {
-    id: 2,
-    name: "David Park",
-    specialty: "Bodybuilding Coach",
-    rating: 4.8,
-    reviews: 89,
-    price: 85,
-    location: "Mission District, San Francisco",
-    distance: "1.2 miles",
-    specializations: ["Bodybuilding", "Strength Training"]
-  },
-  {
-    id: 3,
-    name: "Emma Roberts",
-    specialty: "CrossFit Trainer",
-    rating: 4.9,
-    reviews: 156,
-    price: 80,
-    location: "SoMa, San Francisco",
-    distance: "1.5 miles",
-    specializations: ["CrossFit", "Functional Fitness"]
-  },
-  {
-    id: 4,
-    name: "Mike Thompson",
-    specialty: "Strength & Conditioning",
-    rating: 4.7,
-    reviews: 98,
-    price: 70,
-    location: "Marina District, San Francisco",
-    distance: "2.0 miles",
-    specializations: ["Strength Training", "Athletic Performance"]
-  },
-  {
-    id: 5,
-    name: "Lisa Chen",
-    specialty: "HIIT & Cardio Expert",
-    rating: 4.8,
-    reviews: 112,
-    price: 65,
-    location: "Pacific Heights, San Francisco",
-    distance: "2.3 miles",
-    specializations: ["HIIT", "Cardio", "Endurance"]
-  },
-  {
-    id: 6,
-    name: "James Wilson",
-    specialty: "Yoga & Flexibility",
-    rating: 4.9,
-    reviews: 201,
-    price: 60,
-    location: "Hayes Valley, San Francisco",
-    distance: "1.8 miles",
-    specializations: ["Yoga", "Flexibility", "Mobility"]
-  },
-  {
-    id: 7,
-    name: "Amanda Foster",
-    specialty: "Pre/Post Natal Fitness",
-    rating: 5.0,
-    reviews: 67,
-    price: 90,
-    location: "Noe Valley, San Francisco",
-    distance: "2.5 miles",
-    specializations: ["Pre-Natal", "Post-Natal", "Core Strength"]
-  },
-  {
-    id: 8,
-    name: "Carlos Rodriguez",
-    specialty: "Boxing & MMA",
-    rating: 4.8,
-    reviews: 143,
-    price: 75,
-    location: "Tenderloin, San Francisco",
-    distance: "0.5 miles",
-    specializations: ["Boxing", "MMA", "Self-Defense"]
-  }
-]
-
 const specializations = [
   "Weight Loss",
   "Bodybuilding",
@@ -305,7 +214,7 @@ export default function TrainersPage() {
   const [priceRange, setPriceRange] = useState([0, 150])
   const [selectedSpecs, setSelectedSpecs] = useState<string[]>([])
   const [minRating, setMinRating] = useState(0)
-  const [trainerList, setTrainerList] = useState<TrainerListItem[]>(trainers)
+  const [trainerList, setTrainerList] = useState<TrainerListItem[]>([])
   const [mounted, setMounted] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -329,10 +238,10 @@ export default function TrainersPage() {
     getTrainers().then(({ data, error }) => {
       if (error) {
         console.error("Error loading trainers from Supabase:", error)
-        setLoadError("Could not load trainers. Showing demo data.")
+        setLoadError("Could not load trainers right now. Please try again shortly.")
         return
       }
-      if (data.length > 0) setTrainerList(data)
+      setTrainerList(data)
     })
   }, [])
 

@@ -21,7 +21,29 @@ import type { Trainer } from "@/types/trainer"
 
 const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const
 
-export function TrainerProfileView({ trainer }: { trainer: Trainer }) {
+export function TrainerProfileView({ trainer }: { trainer: Trainer | null | undefined }) {
+  if (!trainer) {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <Link href="/trainers" className="flex items-center gap-2 text-foreground hover:text-primary transition-colors">
+              <ArrowLeft className="w-5 h-5" />
+              <span className="hidden sm:inline">Back to Trainers</span>
+            </Link>
+          </div>
+        </header>
+        <main className="pt-16 pb-24">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="rounded-lg border border-border bg-card p-6 text-muted-foreground">
+              Loading trainer profile...
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">

@@ -14,10 +14,12 @@ export default async function TrainerProfilePage({
 
   if (error) {
     console.error("Trainer profile fetch error:", error)
-    notFound()
+    return <TrainerProfileView trainer={null} />
   }
 
-  if (!trainer) notFound()
+  if (!trainer) {
+    return <TrainerProfileView trainer={null} />
+  }
 
   return <TrainerProfileView trainer={trainer} />
 }
