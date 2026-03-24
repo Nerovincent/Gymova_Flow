@@ -20,6 +20,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [resetSuccess, setResetSuccess] = useState(false)
   // Prevents the auto-redirect useEffect from firing mid-submit and racing
   // with the manual redirect logic in handleSubmit.
   const isHandlingSubmit = useRef(false)
@@ -42,6 +43,12 @@ export default function LoginPage() {
       })
     }
   }, [loading, session, router])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const params = new URLSearchParams(window.location.search)
+    setResetSuccess(params.get("reset") === "success")
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -203,6 +210,12 @@ export default function LoginPage() {
             {error && (
               <p className="text-sm text-destructive">
                 {error}
+              </p>
+            )}
+
+            {resetSuccess && !error && (
+              <p className="text-sm text-emerald-500">
+                Password reset successful. Please sign in with your new password.
               </p>
             )}
 
