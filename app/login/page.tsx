@@ -27,6 +27,15 @@ export default function LoginPage() {
   useEffect(() => {
     if (isHandlingSubmit.current) return
     if (!loading && session?.user) {
+      if (!session.user.email_confirmed_at) {
+        const accountType =
+          (session.user.user_metadata as { account_type?: string } | undefined)
+            ?.account_type === "trainer"
+            ? "trainer"
+            : "client"
+        router.replace(`/verify-email?email=${encodeURIComponent(session.user.email ?? "")}&type=${accountType}`)
+        return
+      }
       getIsApprovedTrainer(session.user.id).then((isTrainer) => {
         if (isHandlingSubmit.current) return
         router.replace(isTrainer ? "/trainer" : "/dashboard")
@@ -58,6 +67,18 @@ export default function LoginPage() {
     if (!userId) {
       setIsLoading(false)
       isHandlingSubmit.current = false
+      return
+    }
+
+    if (!data.user.email_confirmed_at) {
+      const accountType =
+        (data.user.user_metadata as { account_type?: string } | undefined)
+          ?.account_type === "trainer"
+          ? "trainer"
+          : "client"
+      setIsLoading(false)
+      await supabase.auth.signOut()
+      router.replace(`/verify-email?email=${encodeURIComponent(email)}&type=${accountType}`)
       return
     }
 
