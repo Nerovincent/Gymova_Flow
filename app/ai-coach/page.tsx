@@ -15,7 +15,7 @@ import {
   Users,
   RefreshCw,
 } from "lucide-react"
-import { useEffect, useState, useRef } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/components/auth/AuthProvider"
 
@@ -134,7 +134,7 @@ interface Message {
 
 const initialMessages: Message[] = []
 
-export default function AICoachPage() {
+function AICoachContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { session, loading } = useAuth()
@@ -334,5 +334,21 @@ export default function AICoachPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function AICoachFallback() {
+  return (
+    <div className="h-screen bg-background flex items-center justify-center">
+      <span className="text-muted-foreground">Loading AI Coach...</span>
+    </div>
+  )
+}
+
+export default function AICoachPage() {
+  return (
+    <Suspense fallback={<AICoachFallback />}>
+      <AICoachContent />
+    </Suspense>
   )
 }

@@ -1,5 +1,35 @@
 import { NextRequest, NextResponse } from "next/server"
 
+type ParsedMatch = { id: number; reason: string }
+
+function toShortReason(input: unknown): string {
+  if (typeof input !== "string") return ""
+  const words = input
+    .trim()
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+  return words.slice(0, 12).join(" ")
+}
+
+function extractJsonArray(text: string): unknown[] {
+  const clean = text.replace(/```json|```/g, "").trim()
+  try {
+    const parsed = JSON.parse(clean)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    const start = clean.indexOf("[")
+    const end = clean.lastIndexOf("]")
+    if (start === -1 || end === -1 || end <= start) return []
+    try {
+      const parsed = JSON.parse(clean.slice(start, end + 1))
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+}
+
 export async function POST(req: NextRequest) {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
@@ -19,6 +49,16 @@ export async function POST(req: NextRequest) {
   if (!Array.isArray(trainers) || trainers.length === 0) {
     return NextResponse.json({ matches: [] })
   }
+
+  const validTrainerIds = new Set(
+    trainers
+      .map((trainer) => {
+        const row = trainer as { id?: unknown }
+        const id = Number(row.id)
+        return Number.isInteger(id) && id > 0 ? id : null
+      })
+      .filter((id): id is number => id !== null)
+  )
 
   const prompt = `You are a fitness trainer matching engine. A client has the following goals:
 ${JSON.stringify(goals, null, 2)}
@@ -51,26 +91,22 @@ Format:
 
     const data = await res.json()
     const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]"
-    const clean = text.replace(/```json|```/g, "").trim()
+    const parsed = extractJsonArray(text)
+    const seen = new Set<number>()
+    const matches = parsed
+      .map((item: unknown): ParsedMatch | null => {
+        const row = item as { id?: unknown; reason?: unknown }
+        const id = Number(row.id)
+        const reason = toShortReason(row.reason)
+        if (!Number.isInteger(id) || id <= 0 || !reason) return null
+        if (!validTrainerIds.has(id)) return null
+        if (seen.has(id)) return null
+        seen.add(id)
+        return { id, reason }
+      })
+      .filter((row): row is ParsedMatch => row !== null)
 
-    try {
-      const parsed = JSON.parse(clean)
-      const matches = Array.isArray(parsed)
-        ? parsed
-            .map((item: unknown) => {
-              const row = item as { id?: unknown; reason?: unknown }
-              const id = Number(row.id)
-              const reason = typeof row.reason === "string" ? row.reason.trim() : ""
-              if (!Number.isInteger(id) || id <= 0 || !reason) return null
-              return { id, reason: reason.slice(0, 120) }
-            })
-            .filter((row): row is { id: number; reason: string } => row !== null)
-        : []
-
-      return NextResponse.json({ matches })
-    } catch {
-      return NextResponse.json({ matches: [] })
-    }
+    return NextResponse.json({ matches })
   } catch (err) {
     console.error("match-trainer fetch error:", err)
     return NextResponse.json({ matches: [] }, { status: 502 })
