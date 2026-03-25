@@ -16,7 +16,7 @@ export function DashboardTopNav({
   showSignOut = true,
 }: DashboardTopNavProps) {
   return (
-    <header className="fixed top-0 right-0 left-0 lg:left-64 h-16 bg-background/80 backdrop-blur-md border-b border-border z-30">
+    <header className="sticky top-0 h-16 bg-background/80 backdrop-blur-md border-b border-border z-30">
       <div className="flex items-center justify-between h-full px-4 lg:px-8">
         <div className="flex items-center gap-4">
           <button className="lg:hidden text-foreground" onClick={onMenuClick}>

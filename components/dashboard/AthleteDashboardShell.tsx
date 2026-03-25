@@ -57,6 +57,7 @@ export function AthleteDashboardShell({
   contentClassName,
 }: AthleteDashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [isTrainer, setIsTrainer] = useState(false)
   const [isPendingTrainer, setIsPendingTrainer] = useState(false)
 
@@ -117,22 +118,29 @@ export function AthleteDashboardShell({
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div
+      className="min-h-screen bg-background lg:grid"
+      style={{ gridTemplateColumns: isSidebarCollapsed ? "5rem minmax(0,1fr)" : "16rem minmax(0,1fr)" }}
+    >
       <DashboardSidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        collapsed={isSidebarCollapsed}
+        onToggleCollapsed={() => setIsSidebarCollapsed((value) => !value)}
         userName={(user?.user_metadata as { full_name?: string })?.full_name || user?.email || null}
         userEmail={user?.email ?? null}
         onLogout={handleLogout}
         links={sidebarLinks}
         title="GymovaFlow"
       />
-      <DashboardTopNav
-        onMenuClick={() => setSidebarOpen(true)}
-        onLogout={handleLogout}
-        title={title || getDefaultTitle(pathname)}
-      />
-      <main className={cn("lg:pl-64 pt-16 p-4 lg:p-8", contentClassName)}>{children}</main>
+      <div className="min-w-0">
+        <DashboardTopNav
+          onMenuClick={() => setSidebarOpen(true)}
+          onLogout={handleLogout}
+          title={title || getDefaultTitle(pathname)}
+        />
+        <main className={cn("p-4 lg:p-8", contentClassName)}>{children}</main>
+      </div>
     </div>
   )
 }

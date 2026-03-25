@@ -35,6 +35,7 @@ function getTrainerTitle(pathname: string): string {
 
 export default function TrainerLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [trainerChecked, setTrainerChecked] = useState(false)
 
   const router = useRouter()
@@ -71,10 +72,15 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div
+      className="min-h-screen bg-background lg:grid"
+      style={{ gridTemplateColumns: isSidebarCollapsed ? "5rem minmax(0,1fr)" : "16rem minmax(0,1fr)" }}
+    >
       <DashboardSidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        collapsed={isSidebarCollapsed}
+        onToggleCollapsed={() => setIsSidebarCollapsed((value) => !value)}
         userName={(user?.user_metadata as { full_name?: string })?.full_name || user?.email || null}
         userEmail={user?.email ?? null}
         onLogout={handleLogout}
@@ -82,14 +88,14 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
         title="Trainer"
         signedInAs="trainer"
       />
-      <DashboardTopNav
-        onMenuClick={() => setSidebarOpen(true)}
-        onLogout={handleLogout}
-        title={getTrainerTitle(pathname)}
-      />
-      <main className="lg:pl-64 pt-16">
-        <div className="p-4 lg:p-8">{children}</div>
-      </main>
+      <div className="min-w-0">
+        <DashboardTopNav
+          onMenuClick={() => setSidebarOpen(true)}
+          onLogout={handleLogout}
+          title={getTrainerTitle(pathname)}
+        />
+        <main className="p-4 lg:p-8">{children}</main>
+      </div>
     </div>
   )
 }
