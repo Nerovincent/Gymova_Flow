@@ -8,6 +8,7 @@ export type DashboardSidebarLink = {
   href: string
   label: string
   icon: React.ElementType
+  badge?: number | string
 }
 
 interface DashboardSidebarProps {
@@ -70,14 +71,26 @@ export function DashboardSidebar({
                   href={link.href}
                   onClick={onClose}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                    "flex items-center justify-between gap-3 px-4 py-3 rounded-lg transition-colors",
                     isActive
                       ? "bg-sidebar-accent text-sidebar-primary"
                       : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                   )}
                 >
-                  <link.icon className="w-5 h-5" />
-                  <span className="font-medium">{link.label}</span>
+                  <div className="flex items-center gap-3">
+                    <link.icon className="w-5 h-5" />
+                    <span className="font-medium">{link.label}</span>
+                  </div>
+                  {link.badge && (
+                    <span className={cn(
+                      "text-xs font-semibold px-2 py-0.5 rounded-full",
+                      isActive
+                        ? "bg-sidebar-primary-foreground/20 text-sidebar-primary-foreground"
+                        : "bg-sidebar-primary/20 text-sidebar-primary"
+                    )}>
+                      {link.badge}
+                    </span>
+                  )}
                 </Link>
               )
             })}
