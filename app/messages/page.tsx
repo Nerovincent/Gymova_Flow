@@ -1,13 +1,11 @@
 "use client"
 
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
   ArrowLeft,
   Check,
   CheckCheck,
-  Dumbbell,
   MoreVertical,
   Phone,
   Search,
@@ -16,6 +14,7 @@ import {
 } from "lucide-react"
 
 import { useAuth } from "@/components/auth/AuthProvider"
+import { AthleteDashboardShell } from "@/components/dashboard/AthleteDashboardShell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
@@ -352,56 +351,14 @@ export default function MessagesPage() {
   )
 
   return (
-    <div className="h-screen bg-background flex flex-col">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border lg:hidden">
-        <div className="px-4 h-16 flex items-center justify-between">
-          {!showConversations && selectedConversation ? (
-            <>
-              <button onClick={() => setShowConversations(true)} className="flex items-center gap-2 text-foreground">
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-secondary" />
-                <span className="font-medium text-foreground">{selectedConversation.partnerName}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon">
-                  <Phone className="w-5 h-5 text-muted-foreground" />
-                </Button>
-                <Button variant="ghost" size="icon">
-                  <Video className="w-5 h-5 text-muted-foreground" />
-                </Button>
-              </div>
-            </>
-          ) : (
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Dumbbell className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="text-lg font-bold text-foreground">Messages</span>
-            </Link>
-          )}
-        </div>
-      </header>
-
-      <main className="flex-1 pt-16 lg:pt-0 flex">
+    <AthleteDashboardShell title="Messages" contentClassName="p-0">
+      <div className="h-[calc(100vh-4rem)] bg-background flex">
         <aside
           className={`w-full lg:w-80 border-r border-border bg-background shrink-0 ${
             showConversations ? "block" : "hidden lg:block"
           }`}
         >
           <div className="h-full flex flex-col">
-            <div className="hidden lg:flex items-center gap-2 p-4 border-b border-border">
-              <Link href="/dashboard" className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                  <Dumbbell className="w-5 h-5 text-primary-foreground" />
-                </div>
-                <span className="text-lg font-bold text-foreground">Messages</span>
-              </Link>
-            </div>
-
             <div className="p-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -436,6 +393,26 @@ export default function MessagesPage() {
         <div className={`flex-1 flex flex-col ${showConversations ? "hidden lg:flex" : "flex"}`}>
           {selectedConversation ? (
             <>
+              <div className="lg:hidden flex items-center justify-between p-4 border-b border-border">
+                <button onClick={() => setShowConversations(true)} className="flex items-center gap-2 text-foreground">
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-secondary" />
+                  <span className="font-medium text-foreground">{selectedConversation.partnerName}</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon">
+                    <Phone className="w-5 h-5 text-muted-foreground" />
+                  </Button>
+                  <Button variant="ghost" size="icon">
+                    <Video className="w-5 h-5 text-muted-foreground" />
+                  </Button>
+                </div>
+              </div>
+
               <div className="hidden lg:flex items-center justify-between p-4 border-b border-border">
                 <div className="flex items-center gap-3">
                   {selectedConversation.partnerAvatar ? (
@@ -508,7 +485,7 @@ export default function MessagesPage() {
             </div>
           )}
         </div>
-      </main>
-    </div>
+      </div>
+    </AthleteDashboardShell>
   )
 }

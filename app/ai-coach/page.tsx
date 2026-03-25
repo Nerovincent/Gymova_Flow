@@ -187,14 +187,11 @@ function AICoachContent() {
   }
 
   return (
-    <div className="h-[calc(100vh-4rem)] bg-background flex flex-col">
-      <main className="flex-1 pb-6 overflow-y-auto">
+    <div className="min-h-[calc(100vh-4rem)] bg-background flex flex-col">
+      <main className="flex-1 pb-6">
         <div className="max-w-4xl mx-auto px-4 py-8">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">AI Fitness Coach</h1>
-              <p className="text-sm text-muted-foreground mt-1">Personalized guidance for workouts and nutrition</p>
-            </div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8">
+            <p className="text-sm text-muted-foreground">Personalized guidance for workouts and nutrition</p>
             <Button variant="ghost" size="sm" onClick={handleNewChat}>
               <RefreshCw className="w-4 h-4 mr-2" />
               New Chat
@@ -206,7 +203,6 @@ function AICoachContent() {
               <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
                 <Sparkles className="w-8 h-8 text-primary" />
               </div>
-              <h1 className="text-2xl font-bold text-foreground mb-2">AI Fitness Coach</h1>
               <p className="text-muted-foreground mb-8 max-w-md mx-auto">
                 Ask me anything about fitness, workouts, nutrition, or finding the right trainer for your goals.
               </p>
@@ -240,7 +236,7 @@ function AICoachContent() {
                       <Sparkles className="w-4 h-4 text-primary" />
                     </div>
                   )}
-                  <div className={`max-w-[80%] ${message.role === "user" ? "order-1" : ""}`}>
+                  <div className={`max-w-[90%] sm:max-w-[80%] ${message.role === "user" ? "order-1" : ""}`}>
                     <Card className={`${message.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border-border"}`}>
                       <CardContent className="p-4">
                         {message.role === "assistant" ? (
@@ -285,7 +281,7 @@ function AICoachContent() {
         </div>
       </main>
 
-      <div className="border-t border-border bg-background p-4">
+      <div className="sticky bottom-0 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 p-4">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center gap-2">
             <Input
@@ -315,7 +311,7 @@ function AICoachContent() {
 
 function AICoachFallback() {
   return (
-    <div className="h-[calc(100vh-4rem)] bg-background flex items-center justify-center">
+    <div className="min-h-[calc(100vh-4rem)] bg-background flex items-center justify-center">
       <span className="text-muted-foreground">Loading AI Coach...</span>
     </div>
   )
