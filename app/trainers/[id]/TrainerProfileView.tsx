@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { AthleteDashboardShell } from "@/components/dashboard/AthleteDashboardShell"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -24,30 +25,26 @@ const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"
 export function TrainerProfileView({ trainer }: { trainer: Trainer | null | undefined }) {
   if (!trainer) {
     return (
-      <div className="min-h-screen bg-background">
-        <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <AthleteDashboardShell title="Trainer Profile">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="h-16 flex items-center justify-between border-b border-border mb-8">
             <Link href="/trainers" className="flex items-center gap-2 text-foreground hover:text-primary transition-colors">
               <ArrowLeft className="w-5 h-5" />
               <span className="hidden sm:inline">Back to Trainers</span>
             </Link>
           </div>
-        </header>
-        <main className="pt-16 pb-24">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="rounded-lg border border-border bg-card p-6 text-muted-foreground">
-              Loading trainer profile...
-            </div>
+          <div className="rounded-lg border border-border bg-card p-6 text-muted-foreground">
+            Loading trainer profile...
           </div>
-        </main>
-      </div>
+        </div>
+      </AthleteDashboardShell>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <AthleteDashboardShell title="Trainer Profile">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="h-16 flex items-center justify-between border-b border-border mb-8">
           <Link href="/trainers" className="flex items-center gap-2 text-foreground hover:text-primary transition-colors">
             <ArrowLeft className="w-5 h-5" />
             <span className="hidden sm:inline">Back to Trainers</span>
@@ -61,10 +58,7 @@ export function TrainerProfileView({ trainer }: { trainer: Trainer | null | unde
             </Button>
           </div>
         </div>
-      </header>
 
-      <main className="pt-16 pb-24">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
               <div className="flex flex-col sm:flex-row items-start gap-6">
@@ -281,8 +275,7 @@ export function TrainerProfileView({ trainer }: { trainer: Trainer | null | unde
               </div>
             </div>
           </div>
-        </div>
-      </main>
-    </div>
+      </div>
+    </AthleteDashboardShell>
   )
 }

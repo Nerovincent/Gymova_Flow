@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 
 import { useAuth } from "@/components/auth/AuthProvider"
+import { AthleteDashboardShell } from "@/components/dashboard/AthleteDashboardShell"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
@@ -370,9 +371,9 @@ export default function BookingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <AthleteDashboardShell title="Book Session">
+      <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+        <div className="h-16 flex items-center justify-between border-b border-border mb-8">
           <Link
             href={`/trainers/${trainer.id}`}
             className="flex items-center gap-2 text-foreground hover:text-primary transition-colors"
@@ -382,10 +383,7 @@ export default function BookingPage() {
           </Link>
           <span className="text-muted-foreground">Step {step} of 2</span>
         </div>
-      </header>
 
-      <main className="pt-16 pb-24">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <h1 className="text-2xl font-bold text-foreground mb-8">Book a Session</h1>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -620,8 +618,7 @@ export default function BookingPage() {
               </div>
             </div>
           </div>
-        </div>
-      </main>
-    </div>
+      </div>
+    </AthleteDashboardShell>
   )
 }

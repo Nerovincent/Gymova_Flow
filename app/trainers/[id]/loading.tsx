@@ -1,7 +1,11 @@
+"use client"
+
+import { AthleteDashboardShell } from "@/components/dashboard/AthleteDashboardShell"
+
 export default function TrainerProfileLoading() {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
+    <AthleteDashboardShell title="Trainer Profile">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
             <div className="flex flex-col sm:flex-row items-start gap-6">
@@ -25,6 +29,6 @@ export default function TrainerProfileLoading() {
           </div>
         </div>
       </div>
-    </div>
+    </AthleteDashboardShell>
   )
 }

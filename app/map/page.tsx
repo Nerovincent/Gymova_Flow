@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic"
 import Link from "next/link"
+import { AthleteDashboardShell } from "@/components/dashboard/AthleteDashboardShell"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,7 +12,6 @@ import {
   List,
   X,
   Navigation,
-  Dumbbell,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -305,20 +305,12 @@ export default function MapPage() {
   const selected = filteredTrainers.find((t) => t.trainer_id === selectedTrainer)
 
   return (
-    <div className="h-screen bg-background flex flex-col">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-1200 bg-background/80 backdrop-blur-md border-b border-border">
-        <div className="max-w-full mx-auto px-4 py-2 flex flex-col gap-2">
+    <AthleteDashboardShell title="Map" contentClassName="p-0">
+      <div className="h-[calc(100vh-4rem)] bg-background flex flex-col">
+        <div className="border-b border-border bg-background/95 backdrop-blur-md">
+          <div className="max-w-full mx-auto px-4 py-2 flex flex-col gap-2">
           {/* Row 1: Logo, trainer search, List View */}
           <div className="flex items-center justify-between gap-2 h-12">
-            <div className="flex items-center gap-4 shrink-0">
-              <Link href="/" className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                  <Dumbbell className="w-5 h-5 text-primary-foreground" />
-                </div>
-                <span className="text-lg font-bold text-foreground hidden sm:inline">GymovaFlow</span>
-              </Link>
-            </div>
             <div className="flex-1 max-w-md min-w-0">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground shrink-0" />
@@ -387,9 +379,9 @@ export default function MapPage() {
             <p className="text-xs text-destructive">{locationSearchError}</p>
           )}
         </div>
-      </header>
+      </div>
 
-      <main className="flex-1 pt-28 relative">
+      <main className="flex-1 relative">
 
         {/* Real map — fills entire background */}
         <div className="absolute inset-0">
@@ -610,5 +602,6 @@ export default function MapPage() {
         )}
       </main>
     </div>
+    </AthleteDashboardShell>
   )
 }
