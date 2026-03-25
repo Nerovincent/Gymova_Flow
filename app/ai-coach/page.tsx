@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import {
+  FileText,
+  Image as ImageIcon,
+  Paperclip,
   Send,
   Sparkles,
   User,
@@ -12,10 +15,26 @@ import {
   Target,
   Users,
   RefreshCw,
+  X,
 } from "lucide-react"
 import { Suspense, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
+import { useAuth } from "@/components/auth/AuthProvider"
 import { AthleteDashboardShell } from "@/components/dashboard/AthleteDashboardShell"
+import { supabase } from "@/lib/supabaseClient"
+
+const ATTACHMENT_BUCKET = "ai-chat-attachments"
+const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024
+const ACCEPTED_ATTACHMENT_TYPES = ["application/pdf", "image/"]
+
+interface AttachmentMeta {
+  id: string
+  name: string
+  mimeType: string
+  size: number
+  path: string
+  url: string
+}
 
 // Lightweight markdown renderer: bold, headers, unordered lists
 function MarkdownContent({ text, className }: { text: string; className?: string }) {
@@ -128,16 +147,86 @@ interface Message {
   id: number
   role: "user" | "assistant"
   content: string
+  attachments?: AttachmentMeta[]
 }
 
 const initialMessages: Message[] = []
 
 function AICoachContent() {
+  const { user } = useAuth()
   const searchParams = useSearchParams()
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [input, setInput] = useState("")
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const sentInitialRef = useRef(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const formatFileSize = (size: number) => {
+    if (size < 1024) return `${size} B`
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  const isAcceptedAttachmentType = (type: string) => {
+    return ACCEPTED_ATTACHMENT_TYPES.some((accepted) =>
+      accepted.endsWith("/") ? type.startsWith(accepted) : type === accepted
+    )
+  }
+
+  const handleFileSelection = (files: FileList | null) => {
+    if (!files) return
+
+    const next = Array.from(files).filter((file) => {
+      if (!isAcceptedAttachmentType(file.type)) return false
+      if (file.size > MAX_ATTACHMENT_SIZE_BYTES) return false
+      return true
+    })
+
+    if (next.length === 0) return
+    setPendingFiles((prev) => [...prev, ...next].slice(0, 4))
+  }
+
+  const removePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const uploadAttachments = async (files: File[]): Promise<AttachmentMeta[]> => {
+    const owner = user?.id ?? "anonymous"
+
+    const uploaded = await Promise.all(
+      files.map(async (file) => {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")
+        const fileId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        const path = `${owner}/${fileId}-${safeName}`
+
+        const { error: uploadError } = await supabase.storage
+          .from(ATTACHMENT_BUCKET)
+          .upload(path, file, { upsert: false, contentType: file.type })
+
+        if (uploadError) {
+          throw new Error(`Failed to upload ${file.name}`)
+        }
+
+        const { data: signedData } = await supabase.storage
+          .from(ATTACHMENT_BUCKET)
+          .createSignedUrl(path, 60 * 60 * 24 * 7)
+
+        const publicUrl = supabase.storage.from(ATTACHMENT_BUCKET).getPublicUrl(path).data.publicUrl
+
+        return {
+          id: fileId,
+          name: file.name,
+          mimeType: file.type,
+          size: file.size,
+          path,
+          url: signedData?.signedUrl ?? publicUrl,
+        }
+      })
+    )
+
+    return uploaded
+  }
 
   // Auto-send query from ?q= param (e.g. from dashboard quick-send)
   useEffect(() => {
@@ -150,19 +239,43 @@ function AICoachContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
-  const handleSend = async (message: string) => {
-    if (!message.trim()) return
+  const handleSend = async (messageText?: string) => {
+    const message = (messageText ?? input).trim()
+    if (!message && pendingFiles.length === 0) return
 
-    const userMsg: Message = { id: Date.now(), role: "user", content: message }
-    const newMessages = [...messages, userMsg]
-    setMessages(newMessages)
+    const filesToUpload = [...pendingFiles]
+    setPendingFiles([])
     setInput("")
     setIsLoading(true)
+
     try {
+      const attachments = filesToUpload.length > 0 ? await uploadAttachments(filesToUpload) : []
+
+      const userMsg: Message = {
+        id: Date.now(),
+        role: "user",
+        content: message || "Please analyze my attachment(s).",
+        attachments,
+      }
+
+      const newMessages = [...messages, userMsg]
+      setMessages(newMessages)
+
       const res = await fetch("/api/ai-coach", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMessages.map((m) => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({
+          messages: newMessages.map((m) => ({
+            role: m.role,
+            content: m.content,
+            attachments: m.attachments?.map((a) => ({
+              name: a.name,
+              mimeType: a.mimeType,
+              size: a.size,
+              url: a.url,
+            })),
+          })),
+        }),
       })
       const { reply } = await res.json()
       setMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: reply }])
@@ -228,17 +341,46 @@ function AICoachContent() {
               </div>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-5">
               {messages.map((message) => (
-                <div key={message.id} className={`flex gap-4 ${message.role === "user" ? "justify-end" : ""}`}>
+                <div key={message.id} className={`flex gap-2.5 ${message.role === "user" ? "justify-end" : ""}`}>
                   {message.role === "assistant" && (
-                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                      <Sparkles className="w-4 h-4 text-primary" />
+                    <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0 mt-1">
+                      <Sparkles className="w-3.5 h-3.5 text-primary" />
                     </div>
                   )}
                   <div className={`max-w-[90%] sm:max-w-[80%] ${message.role === "user" ? "order-1" : ""}`}>
-                    <Card className={`${message.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border-border"}`}>
-                      <CardContent className="p-4">
+                    <Card className={message.role === "user"
+                      ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-none border-transparent shadow-sm"
+                      : "bg-card border border-border rounded-2xl rounded-tl-none shadow-sm"
+                    }>
+                      <CardContent className="p-3 sm:p-3.5">
+                        {message.attachments && message.attachments.length > 0 && (
+                          <div className="mb-2 space-y-2">
+                            {message.attachments.map((attachment) => (
+                              <div key={attachment.id} className="rounded-lg border border-white/20 bg-white/5 p-2">
+                                {attachment.mimeType.startsWith("image/") ? (
+                                  <a href={attachment.url} target="_blank" rel="noreferrer" className="block">
+                                    <img
+                                      src={attachment.url}
+                                      alt={attachment.name}
+                                      className="w-full max-h-40 object-cover rounded-md mb-2"
+                                    />
+                                  </a>
+                                ) : null}
+                                <div className="flex items-center gap-2 text-xs">
+                                  {attachment.mimeType.startsWith("image/") ? (
+                                    <ImageIcon className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <FileText className="w-3.5 h-3.5" />
+                                  )}
+                                  <span className="truncate">{attachment.name}</span>
+                                  <span className="opacity-80">{formatFileSize(attachment.size)}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         {message.role === "assistant" ? (
                           <MarkdownContent
                             text={message.content}
@@ -261,12 +403,12 @@ function AICoachContent() {
               ))}
               
               {isLoading && (
-                <div className="flex gap-4">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <Sparkles className="w-4 h-4 text-primary animate-pulse" />
+                <div className="flex gap-2.5">
+                  <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0 mt-1">
+                    <Sparkles className="w-3.5 h-3.5 text-primary animate-pulse" />
                   </div>
-                  <Card className="bg-card border-border">
-                    <CardContent className="p-4">
+                  <Card className="bg-card border border-border rounded-2xl rounded-tl-none shadow-sm">
+                    <CardContent className="p-3">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-primary animate-bounce" />
                         <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0.1s" }} />
@@ -284,6 +426,17 @@ function AICoachContent() {
       <div className="sticky bottom-0 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 p-4">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="border-border"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading}
+              title="Attach image or PDF"
+            >
+              <Paperclip className="w-4 h-4" />
+            </Button>
             <Input
               placeholder="Ask me anything about fitness..."
               value={input}
@@ -292,14 +445,51 @@ function AICoachContent() {
               disabled={isLoading}
               className="flex-1 bg-input border-border"
             />
-            <Button 
+            <Button
               onClick={() => handleSend(input)}
-              disabled={!input.trim() || isLoading}
+              disabled={(!input.trim() && pendingFiles.length === 0) || isLoading}
               className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               <Send className="w-4 h-4" />
             </Button>
           </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,application/pdf"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              handleFileSelection(e.target.files)
+              e.currentTarget.value = ""
+            }}
+          />
+
+          {pendingFiles.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {pendingFiles.map((file, index) => (
+                <div key={`${file.name}-${index}`} className="flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs bg-background">
+                  {file.type.startsWith("image/") ? (
+                    <ImageIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                  ) : (
+                    <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+                  )}
+                  <span className="max-w-[180px] truncate text-foreground">{file.name}</span>
+                  <span className="text-muted-foreground">{formatFileSize(file.size)}</span>
+                  <button
+                    type="button"
+                    onClick={() => removePendingFile(index)}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={`Remove ${file.name}`}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <p className="text-xs text-muted-foreground text-center mt-2">
             AI Coach provides general fitness guidance. Consult a professional for personalized advice.
           </p>
