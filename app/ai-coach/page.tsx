@@ -191,7 +191,7 @@ function AICoachContent() {
       <main className="flex-1 pb-6">
         <div className="max-w-4xl mx-auto px-4 py-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8">
-            <p className="text-sm text-muted-foreground">Personalized guidance for workouts and nutrition</p>
+            {/* <p className="text-sm text-muted-foreground">Personalized guidance for workouts and nutrition</p> */}
             <Button variant="ghost" size="sm" onClick={handleNewChat}>
               <RefreshCw className="w-4 h-4 mr-2" />
               New Chat
