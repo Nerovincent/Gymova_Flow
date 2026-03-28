@@ -1,3 +1,4 @@
+@import 'maplibre-gl/dist/maplibre-gl.css';
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
@@ -119,7 +120,42 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+}
+
+.gymova-map-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  background: rgba(10, 16, 24, 0.94);
+  color: #f8fafc;
+  padding: 0.35rem 0.55rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+}
+
+.gymova-map-marker.is-selected {
+  background: rgba(132, 204, 22, 0.95);
+  color: #14210a;
+}
+
+.gymova-map-marker__emoji,
+.gymova-map-marker__price {
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.gymova-user-marker {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #2563eb;
+  border: 3px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 8px rgba(37, 99, 235, 0.18);
 }
