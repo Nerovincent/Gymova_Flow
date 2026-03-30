@@ -4,40 +4,36 @@ import { useEffect, useMemo, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import {
   Bell,
-  Briefcase,
   Calendar,
+  Clock,
   LayoutDashboard,
-  MessageCircle,
+  MapPin,
   Search,
   Sparkles,
-  User,
 } from "lucide-react"
 
 import { useAuth } from "@/components/auth/AuthProvider"
 import { DashboardSidebar, DashboardSidebarLink } from "@/components/dashboard/Sidebar"
 import { DashboardTopNav } from "@/components/dashboard/TopNav"
 import { Button } from "@/components/ui/button"
+import { getDashboardRouteForProfile, normalizeUserRole } from "@/lib/rbac"
 import { getProfile } from "@/lib/supabase/profiles"
 import { supabase } from "@/lib/supabaseClient"
-import { getDashboardRouteForProfile } from "@/lib/rbac"
 import { cn } from "@/lib/utils"
 import type { Profile } from "@/types/profile"
 
-const baseSidebarLinks: DashboardSidebarLink[] = [
+const athleteSidebarLinks: DashboardSidebarLink[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/trainers", label: "Find Trainers", icon: Search },
   { href: "/dashboard/bookings", label: "Bookings", icon: Calendar },
-  { href: "/dashboard/notifications", label: "Notifications", icon: Bell },
-  { href: "/messages", label: "Messages", icon: MessageCircle },
   { href: "/ai-coach", label: "AI Coach", icon: Sparkles },
-  { href: "/dashboard/profile", label: "Profile", icon: User },
 ]
 
-const trainerDashboardLink: DashboardSidebarLink = {
-  href: "/trainer",
-  label: "Trainer dashboard",
-  icon: Briefcase,
-}
+const trainerSidebarLinks: DashboardSidebarLink[] = [
+  { href: "/trainer/availability", label: "My availability", icon: Clock },
+  { href: "/trainer/sessions", label: "Sessions", icon: Calendar },
+  { href: "/trainer/locations", label: "My locations", icon: MapPin },
+]
 
 const trainerSharedDashboardRoutes = new Set(["/dashboard/profile", "/dashboard/notifications"])
 
@@ -70,7 +66,7 @@ export function AthleteDashboardShell({
 
   const router = useRouter()
   const pathname = usePathname()
-  const { user, session, loading } = useAuth()
+  const { session, loading } = useAuth()
 
   useEffect(() => {
     if (loading) return
@@ -103,11 +99,13 @@ export function AthleteDashboardShell({
     router.replace("/login")
   }
 
+  const normalizedRole = normalizeUserRole(profile?.role)
   const sidebarLinks = useMemo(
-    () => (profile?.role === "trainer" && profile?.trainer_status === "approved"
-      ? [baseSidebarLinks[0], trainerDashboardLink, ...baseSidebarLinks.slice(1)]
-      : baseSidebarLinks),
-    [profile]
+    () =>
+      normalizedRole === "trainer" && profile?.trainer_status === "approved"
+        ? trainerSidebarLinks
+        : athleteSidebarLinks,
+    [normalizedRole, profile?.trainer_status]
   )
 
   if (loading || (!session && typeof window !== "undefined") || !profileReady) {
@@ -146,11 +144,14 @@ export function AthleteDashboardShell({
         onClose={() => setSidebarOpen(false)}
         collapsed={isSidebarCollapsed}
         onToggleCollapsed={() => setIsSidebarCollapsed((value) => !value)}
-        userName={(user?.user_metadata as { full_name?: string })?.full_name || user?.email || null}
-        userEmail={user?.email ?? null}
+        userName={profile?.full_name || session?.user?.email || null}
+        userEmail={session?.user?.email ?? null}
+        avatarUrl={profile?.avatar_url ?? null}
         onLogout={handleLogout}
         links={sidebarLinks}
         title="GymovaFlow"
+        signedInAs={normalizedRole ?? undefined}
+        homeHref={normalizedRole === "trainer" ? "/trainer" : "/dashboard"}
       />
       <div className="min-w-0">
         <DashboardTopNav

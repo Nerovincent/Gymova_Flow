@@ -16,12 +16,16 @@ export type TrainerWithDistance = TrainerMapEntry & {
 const FALLBACK_CENTER: LatLng = { lat: 44.6488, lng: -63.5752 }
 const TILE_URL = process.env.NEXT_PUBLIC_MAP_TILE_URL ?? "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
 
-function createTrainerIcon(selected: boolean) {
+function createTrainerIcon(trainer: Pick<TrainerWithDistance, "avatar" | "specialties">, selected: boolean) {
+  const avatarMarkup = trainer.avatar
+    ? `<img src="${trainer.avatar}" alt="Trainer avatar" class="gymova-leaflet-marker__avatar" />`
+    : `<span class="gymova-leaflet-marker__glyph">${getSpecialtyEmoji(trainer.specialties)}</span>`
+
   return L.divIcon({
     className: "",
-    html: `<div class=\"gymova-leaflet-marker${selected ? " is-selected" : ""}\"><span class=\"gymova-leaflet-marker__glyph\">🏋</span></div>`,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
+    html: `<div class="gymova-leaflet-marker${selected ? " is-selected" : ""}">${avatarMarkup}</div>`,
+    iconSize: [42, 42],
+    iconAnchor: [21, 21],
   })
 }
 
@@ -135,7 +139,7 @@ export default function OpenMap({
             <Marker
               key={`${trainer.trainer_id}-${trainer.gym_location_id}`}
               position={[trainer.latitude, trainer.longitude]}
-              icon={createTrainerIcon(selected)}
+              icon={createTrainerIcon(trainer, selected)}
               eventHandlers={{
                 click: () => onSelectTrainer(trainer.trainer_id),
               }}
