@@ -11,9 +11,14 @@ export const sendEmail = async ({
   subject: string
   html: string
 }) => {
+  const from = process.env.EMAIL_FROM
+  if (!from) {
+    throw new Error("EMAIL_FROM environment variable is not set.")
+  }
+
   try {
     const response = await resend.emails.send({
-      from: process.env.EMAIL_FROM!,
+      from,
       to,
       subject,
       html,

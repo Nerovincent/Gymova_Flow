@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
         .upsert({ id: user.id, full_name: fullName, role: "client" }, { onConflict: "id" })
 
       // Send welcome email.
-      const firstName = fullName.split(" ")[0]
+      const firstName = fullName.split(" ")[0] || fullName || "there"
       await sendEmail({
         to: email,
         subject: "Welcome to GymovaFlow! 🎉",

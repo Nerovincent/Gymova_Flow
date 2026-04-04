@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate 6-digit OTP.
-    const otp = String(randomInt(100000, 999999))
+    const otp = String(randomInt(100000, 1000000))
     const hashedOtp = hashToken(otp)
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
 

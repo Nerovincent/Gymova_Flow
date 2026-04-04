@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       .eq("type", "verification")
 
     // Generate new OTP.
-    const otp = String(randomInt(100000, 999999))
+    const otp = String(randomInt(100000, 1000000))
     const hashedOtp = hashToken(otp)
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
 
