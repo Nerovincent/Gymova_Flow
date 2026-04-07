@@ -5,6 +5,8 @@ import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { sendEmail } from "@/lib/email/resend"
+import { trainerApprovedEmail, trainerRejectedEmail } from "@/lib/email/templates"
 
 const ADMIN_COOKIE_NAME = "admin_session"
 
@@ -387,6 +389,18 @@ export async function approveTrainer(
     }
   }
 
+  if (application.email) {
+    try {
+      await sendEmail({
+        to: application.email,
+        subject: "Your trainer application was approved – GymovaFlow",
+        html: trainerApprovedEmail(application.name ?? "Trainer"),
+      })
+    } catch (emailError) {
+      console.error("[approveTrainer] Failed to send approval email:", emailError)
+    }
+  }
+
   return {}
 }
 
@@ -412,6 +426,24 @@ export async function rejectTrainer(
 
   if (profileError) {
     console.error("Profile rejection status update failed:", profileError)
+  }
+
+  const { data: application, error: fetchError } = await supabaseAdmin
+    .from("trainer_applications")
+    .select("name, email")
+    .eq("id", applicationId)
+    .single()
+
+  if (!fetchError && application?.email) {
+    try {
+      await sendEmail({
+        to: application.email,
+        subject: "Your trainer application status – GymovaFlow",
+        html: trainerRejectedEmail(application.name ?? "Trainer"),
+      })
+    } catch (emailError) {
+      console.error("[rejectTrainer] Failed to send rejection email:", emailError)
+    }
   }
 
   return {}
