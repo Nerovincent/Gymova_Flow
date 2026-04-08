@@ -1,6 +1,19 @@
 import { Resend } from "resend"
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+const DEFAULT_FROM = "GymovaFlow <noreply@mail.gymovaflow.com>"
+
+let _resend: Resend | null = null
+
+function getResendClient(): Resend {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) {
+    throw new Error("RESEND_API_KEY environment variable is not set.")
+  }
+  if (!_resend) {
+    _resend = new Resend(apiKey)
+  }
+  return _resend
+}
 
 export interface SendEmailOptions {
   to: string | string[]
@@ -10,13 +23,8 @@ export interface SendEmailOptions {
 }
 
 export const sendEmail = async ({ to, subject, html, replyTo }: SendEmailOptions) => {
-  const from = process.env.EMAIL_FROM
-  if (!from) {
-    throw new Error("EMAIL_FROM environment variable is not set.")
-  }
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error("RESEND_API_KEY environment variable is not set.")
-  }
+  const resend = getResendClient()
+  const from = process.env.EMAIL_FROM ?? DEFAULT_FROM
 
   try {
     const response = await resend.emails.send({
