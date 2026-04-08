@@ -83,11 +83,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Could not resend code." }, { status: 500 })
     }
 
-    const emailFrom = process.env.EMAIL_FROM ?? "noreply@mail.gymovaflow.com"
     await sendEmail({
       to: email,
       subject: "Verify your GymovaFlow account",
-      html: verificationEmail(otp, emailFrom),
+      html: verificationEmail(otp),
     })
 
     return NextResponse.json({ success: true })

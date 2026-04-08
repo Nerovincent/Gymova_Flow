@@ -86,12 +86,11 @@ export async function POST(request: NextRequest) {
 
     const baseUrl = getBaseUrl(request)
     const resetLink = `${baseUrl}/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`
-    const emailFrom = process.env.EMAIL_FROM ?? "noreply@mail.gymovaflow.com"
 
     await sendEmail({
       to: email,
       subject: "Reset your GymovaFlow password",
-      html: resetPasswordEmail(resetLink, emailFrom),
+      html: resetPasswordEmail(resetLink),
     })
 
     return NextResponse.json({ success: true })
