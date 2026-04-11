@@ -7,9 +7,12 @@ let _resend: Resend | null = null
 function getResendClient(): Resend {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
+    console.error("[Resend] FATAL: RESEND_API_KEY is null or undefined in process.env")
     throw new Error("RESEND_API_KEY environment variable is not set.")
   }
+  
   if (!_resend) {
+    console.log(`[Resend] Initializing client with API key: ${apiKey.slice(0, 7)}...`)
     _resend = new Resend(apiKey)
   }
   return _resend
@@ -22,37 +25,36 @@ export interface SendEmailOptions {
   replyTo?: string
 }
 
-export const sendEmail = async ({ to, subject, html, replyTo }: SendEmailOptions) => {
+export const sendEmail = async ({ to, subject, html }: SendEmailOptions) => {
   const resend = getResendClient()
   
-  // Normalize 'from' address. Resend prefers "Name <email@domain.com>" format.
-  // If EMAIL_FROM is just an email, wrap it with the default name.
-  let from = process.env.EMAIL_FROM ?? DEFAULT_FROM
-  if (!from.includes("<") && from.includes("@")) {
-    from = `GymovaFlow <${from}>`
-  }
+  // Hardcoded 'from' to ensure it exactly matches the working test script.
+  const from = "GymovaFlow <noreply@mail.gymovaflow.com>"
 
-  // Ensure 'to' is an array of trimmed email strings.
-  const recipientList = (Array.isArray(to) ? to : [to]).map(e => e.trim())
+  // Normalize recipient to an array of trimmed strings.
+  const toArray = (Array.isArray(to) ? to : [to]).map(e => e.trim())
 
   try {
+    console.log(`[Resend] Attempting to send email to: ${toArray.join(", ")}...`)
+    
     const response = await resend.emails.send({
       from,
-      to: recipientList,
+      to: toArray,
       subject,
       html,
-      ...(replyTo ? { reply_to: replyTo } : {}),
     })
 
     if (response.error) {
-      console.error("[Resend] API error detail:", JSON.stringify(response.error, null, 2))
-      throw new Error(response.error.message)
+      console.error("[Resend] API error response:", response.error)
+      throw new Error(response.error.message || "Unknown Resend API error")
     }
 
-    console.log(`[Resend] Email successfully queued — ID: ${response.data?.id} — Recipient: ${recipientList.join(", ")}`)
+    const emailId = response.data?.id
+    console.log(`[Resend] SUCCESS! Email accepted by Resend API. ID: ${emailId}`)
+    
     return response
   } catch (error) {
-    console.error("[Resend] sendEmail failed critically:", error)
+    console.error("[Resend] CRITICAL FAILURE in sendEmail:", error)
     throw error
   }
 }
