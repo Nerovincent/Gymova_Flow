@@ -1,4 +1,4 @@
-export { sendEmail } from "./resend"
+export { sendEmailSmtp as sendEmail } from "./smtp"
 export { sendEmailSmtp } from "./smtp"
 export {
   verificationEmail,

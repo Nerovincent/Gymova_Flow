@@ -1,13 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createHash, randomBytes } from "crypto"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
-import { sendEmail } from "@/lib/email/resend"
-import { resetPasswordEmail } from "@/lib/email/templates"
-import { getUserByEmail } from "@/lib/getUserByEmail"
-
-function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex")
-}
 
 function getBaseUrl(request: NextRequest): string {
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim()
@@ -18,7 +10,9 @@ function getBaseUrl(request: NextRequest): string {
   return `${protocol}://${host}`
 }
 
-
+function isSupabaseEmailRateLimitError(error: { status?: number; code?: string } | null | undefined): boolean {
+  return error?.status === 429 || error?.code === "over_email_send_rate_limit"
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,81 +23,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required field: email" }, { status: 400 })
     }
 
-    // Find user via efficient DB function — respond generically to avoid email enumeration.
-    const user = await getUserByEmail(email)
+    const baseUrl = getBaseUrl(request)
+    
+    // We use Supabase's built-in resetPasswordForEmail now that SMTP is configured in Supabase.
+    // This handles token generation, expiration, and rate limiting automatically.
+    const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+      redirectTo: `${baseUrl}/reset-password`,
+    })
 
-    if (!user) {
-      return NextResponse.json({ success: true })
-    }
-
-    // Rate-limit: one reset request per minute per user.
-    const { data: existing, error: existingError } = await supabaseAdmin
-      .from("auth_tokens")
-      .select("created_at")
-      .eq("user_id", user.id)
-      .eq("type", "reset")
-      .order("created_at", { ascending: false })
-      .limit(1)
-
-    if (existingError) {
-      console.error("[forgot-password] Rate-limit lookup failed:", existingError)
-      return NextResponse.json({ error: "Could not send reset link." }, { status: 500 })
-    }
-
-    if (existing && existing.length > 0) {
-      const lastSent = new Date(existing[0].created_at).getTime()
-      if (Date.now() - lastSent < 60 * 1000) {
+    if (error) {
+      if (isSupabaseEmailRateLimitError(error)) {
         return NextResponse.json(
           { error: "Please wait at least 1 minute before requesting another reset link." },
           { status: 429 }
         )
       }
-    }
-
-    // Delete old reset tokens for this user.
-    const { error: deleteError } = await supabaseAdmin
-      .from("auth_tokens")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("type", "reset")
-
-    if (deleteError) {
-      console.error("[forgot-password] Token cleanup failed:", deleteError)
+      console.error("[forgot-password] Supabase reset password request failed:", error)
       return NextResponse.json({ error: "Could not send reset link." }, { status: 500 })
-    }
-
-    // Generate a secure random 32-byte hex token.
-    const rawToken = randomBytes(32).toString("hex")
-    const hashedToken = hashToken(rawToken)
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
-
-    const { error: tokenError } = await supabaseAdmin.from("auth_tokens").insert({
-      user_id: user.id,
-      token: hashedToken,
-      type: "reset",
-      expires_at: expiresAt.toISOString(),
-    })
-
-    if (tokenError) {
-      console.error("Token insert failed:", tokenError)
-      return NextResponse.json({ error: "Could not send reset link." }, { status: 500 })
-    }
-
-    const baseUrl = getBaseUrl(request)
-    const resetLink = `${baseUrl}/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`
-
-    try {
-      await sendEmail({
-        to: email,
-        subject: "Reset your GymovaFlow password",
-        html: resetPasswordEmail(resetLink),
-      })
-    } catch (emailError) {
-      console.error("Failed to send reset email:", emailError)
-      return NextResponse.json(
-        { error: "Could not send reset link. Please try again later." },
-        { status: 500 }
-      )
     }
 
     return NextResponse.json({ success: true })
