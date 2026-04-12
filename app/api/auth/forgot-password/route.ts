@@ -17,6 +17,22 @@ function getBaseUrl(request: NextRequest): string {
   return `${protocol}://${host}`
 }
 
+function isMissingAuthTokensTable(error: { code?: string; message?: string } | null | undefined): boolean {
+  return error?.code === "PGRST205" && (error.message ?? "").includes("public.auth_tokens")
+}
+
+async function sendRecoveryEmailWithSupabase(email: string, request: NextRequest) {
+  const baseUrl = getBaseUrl(request)
+  const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+    redirectTo: `${baseUrl}/reset-password`,
+  })
+
+  if (error) {
+    console.error("[forgot-password] Supabase recovery email fallback failed:", error)
+    throw new Error("Could not send reset link.")
+  }
+}
+
 async function getUserByEmail(email: string) {
   const normalizedEmail = email.toLowerCase()
   const { data, error } = await supabaseAdmin.rpc("get_auth_user_by_email", {
@@ -75,13 +91,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Rate-limit: one reset request per minute per user.
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: existingError } = await supabaseAdmin
       .from("auth_tokens")
       .select("created_at")
       .eq("user_id", user.id)
       .eq("type", "reset")
       .order("created_at", { ascending: false })
       .limit(1)
+
+    if (existingError) {
+      if (isMissingAuthTokensTable(existingError)) {
+        await sendRecoveryEmailWithSupabase(email, request)
+        return NextResponse.json({ success: true })
+      }
+      console.error("[forgot-password] Rate-limit lookup failed:", existingError)
+      return NextResponse.json({ error: "Could not send reset link." }, { status: 500 })
+    }
 
     if (existing && existing.length > 0) {
       const lastSent = new Date(existing[0].created_at).getTime()
@@ -94,11 +119,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Delete old reset tokens for this user.
-    await supabaseAdmin
+    const { error: deleteError } = await supabaseAdmin
       .from("auth_tokens")
       .delete()
       .eq("user_id", user.id)
       .eq("type", "reset")
+
+    if (deleteError) {
+      if (isMissingAuthTokensTable(deleteError)) {
+        await sendRecoveryEmailWithSupabase(email, request)
+        return NextResponse.json({ success: true })
+      }
+      console.error("[forgot-password] Token cleanup failed:", deleteError)
+      return NextResponse.json({ error: "Could not send reset link." }, { status: 500 })
+    }
 
     // Generate a secure random 32-byte hex token.
     const rawToken = randomBytes(32).toString("hex")
@@ -113,6 +147,10 @@ export async function POST(request: NextRequest) {
     })
 
     if (tokenError) {
+      if (isMissingAuthTokensTable(tokenError)) {
+        await sendRecoveryEmailWithSupabase(email, request)
+        return NextResponse.json({ success: true })
+      }
       console.error("Token insert failed:", tokenError)
       return NextResponse.json({ error: "Could not send reset link." }, { status: 500 })
     }
