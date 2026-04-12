@@ -25,10 +25,13 @@ export async function POST(request: NextRequest) {
 
     const baseUrl = getBaseUrl(request)
     
-    // We use Supabase's built-in resetPasswordForEmail now that SMTP is configured in Supabase.
-    // This handles token generation, expiration, and rate limiting automatically.
-    const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-      redirectTo: `${baseUrl}/reset-password`,
+    // We use generateLink to create the recovery OTP/link so we can send it via Resend
+    const { data: linkData, error } = await supabaseAdmin.auth.admin.generateLink({
+      type: "recovery",
+      email,
+      options: {
+        redirectTo: `${baseUrl}/reset-password`,
+      },
     })
 
     if (error) {
@@ -40,6 +43,21 @@ export async function POST(request: NextRequest) {
       }
       console.error("[forgot-password] Supabase reset password request failed:", error)
       return NextResponse.json({ error: "Could not send reset link." }, { status: 500 })
+    }
+
+    if (linkData?.properties?.action_link) {
+      try {
+        const { sendEmail } = await import("@/lib/email")
+        const { resetPasswordEmail } = await import("@/lib/email/templates")
+        
+        await sendEmail({
+          to: email,
+          subject: "Reset your password – GymovaFlow",
+          html: resetPasswordEmail(linkData.properties.action_link),
+        })
+      } catch (err) {
+        console.error("Failed to send reset password email:", err)
+      }
     }
 
     return NextResponse.json({ success: true })

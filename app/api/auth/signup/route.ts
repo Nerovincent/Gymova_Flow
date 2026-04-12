@@ -24,11 +24,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Use Supabase's native signUp. This will:
-    // 1. Create the user in auth.users
-    // 2. Automatically send a verification email via the configured Supabase SMTP
-    // 3. Handle token/OTP generation internally
-    const { data, error: signUpError } = await supabaseAdmin.auth.signUp({
+    // Since we need to send the email ourselves (custom SMTP via Resend),
+    // we use generateLink to create the user and get the OTP.
+    const { data: linkData, error: signUpError } = await supabaseAdmin.auth.admin.generateLink({
+      type: "signup",
       email,
       password,
       options: {
@@ -37,10 +36,7 @@ export async function POST(request: NextRequest) {
           account_type: accountType,
           onboarding_completed: false,
         },
-        // If your Supabase is configured for 'Double Opt-In', it will send the email.
-        // If 'Email OTP' is enabled, it will send a code.
-        // You can specify where the user goes after clicking a link (optional for OTP)
-        emailRedirectTo: `${request.nextUrl.origin}/login?verified=true`,
+        redirectTo: `${request.nextUrl.origin}/login?verified=true`,
       },
     })
 
@@ -55,11 +51,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: signUpError.message }, { status: 500 })
     }
 
+    // Now send the custom verification email using the OTP returned
+    if (linkData?.properties?.email_otp) {
+      try {
+        const { sendEmail } = await import("@/lib/email")
+        const { verificationEmail } = await import("@/lib/email/templates")
+        
+        await sendEmail({
+          to: email,
+          subject: "Verify your email – GymovaFlow",
+          html: verificationEmail(linkData.properties.email_otp),
+        })
+      } catch (err) {
+        console.error("Failed to send verification email:", err)
+        // Note: the account is created, but email failed to send. User can request a new code.
+      }
+    }
+
     return NextResponse.json({ 
       success: true, 
-      userId: data.user?.id,
-      // If data.session is null, it means confirmation is required
-      confirmationRequired: !data.session 
+      userId: linkData?.user?.id,
+      confirmationRequired: true // signup always requires confirmation
     })
   } catch (err) {
     console.error("Unexpected error in signup route:", err)
