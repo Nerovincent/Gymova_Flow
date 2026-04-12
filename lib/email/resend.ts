@@ -1,5 +1,7 @@
 import { Resend } from "resend"
 
+const DEFAULT_FROM = "noreply@mail.gymovaflow.com"
+
 function getResendClient(): Resend {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
