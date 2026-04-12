@@ -389,17 +389,7 @@ export async function approveTrainer(
     }
   }
 
-  if (application.email) {
-    try {
-      await sendEmail({
-        to: application.email,
-        subject: "Your trainer application was approved – GymovaFlow",
-        html: trainerApprovedEmail(application.name ?? "Trainer"),
-      })
-    } catch (emailError) {
-      console.error("[approveTrainer] Failed to send approval email:", emailError)
-    }
-  }
+
 
   return {}
 }
@@ -434,17 +424,7 @@ export async function rejectTrainer(
     .eq("id", applicationId)
     .single()
 
-  if (!fetchError && application?.email) {
-    try {
-      await sendEmail({
-        to: application.email,
-        subject: "Your trainer application status – GymovaFlow",
-        html: trainerRejectedEmail(application.name ?? "Trainer"),
-      })
-    } catch (emailError) {
-      console.error("[rejectTrainer] Failed to send rejection email:", emailError)
-    }
-  }
+
 
   return {}
 }

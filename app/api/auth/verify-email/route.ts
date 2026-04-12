@@ -55,19 +55,6 @@ export async function POST(request: NextRequest) {
       if (profileError) {
         console.error("[verify-email] Profile upsert failed:", profileError)
       }
-
-      // Send welcome email via SMTP (using the app's transporter)
-      try {
-        const firstName = fullName.split(" ")[0] || "there"
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://gymovaflow.com"
-        await sendEmail({
-          to: email,
-          subject: "Welcome to GymovaFlow! 🎉",
-          html: welcomeEmail(firstName, siteUrl),
-        })
-      } catch (emailError) {
-        console.error("Welcome email failed (non-fatal):", emailError)
-      }
     }
 
     return NextResponse.json({ success: true, accountType })
