@@ -34,11 +34,12 @@ export async function getUserByEmail(email: string): Promise<AuthUser | null> {
     throw new Error("Failed to look up user by email.")
   }
 
-  // Fallback: paginate through all auth users.
+  // Fallback: paginate through all auth users (max 50 pages = 10,000 users).
+  const MAX_PAGES = 50
   let page = 1
   const perPage = 200
 
-  while (true) {
+  while (page <= MAX_PAGES) {
     const { data: usersData, error: usersError } = await supabaseAdmin.auth.admin.listUsers({
       page,
       perPage,
@@ -64,4 +65,7 @@ export async function getUserByEmail(email: string): Promise<AuthUser | null> {
     if (users.length < perPage) return null
     page += 1
   }
+
+  console.error("[getUserByEmail] listUsers fallback exhausted max pages without finding user")
+  return null
 }
