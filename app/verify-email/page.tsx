@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useMemo, useState } from "react"
 import { ArrowLeft, ArrowRight, CheckCircle2, Dumbbell, Mail, RefreshCw } from "lucide-react"
+import { supabase } from "@/lib/supabaseClient"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -49,12 +50,16 @@ function VerifyEmailContent() {
 
       const accountType: "client" | "trainer" = json.accountType ?? type
 
+      if (json.session) {
+        await supabase.auth.setSession(json.session)
+      }
+
       if (accountType === "trainer") {
         setSuccess("Email verified. Redirecting to application status...")
         router.replace("/trainer-pending")
       } else {
-        setSuccess("Email verified! Please sign in to continue.")
-        router.replace("/login?verified=true")
+        setSuccess("Email verified! Redirecting to onboarding...")
+        router.replace("/onboarding")
       }
     } catch {
       setError("Verification failed. Please try again.")

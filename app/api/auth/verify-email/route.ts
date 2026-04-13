@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, accountType })
+    return NextResponse.json({ success: true, accountType, session: verifyData.session })
   } catch (err) {
     console.error("Unexpected error in verify-email route:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
