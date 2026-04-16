@@ -54,12 +54,33 @@ function VerifyEmailContent() {
         await supabase.auth.setSession(json.session)
       }
 
+      const onboardingCompleted = json.onboardingCompleted === true
+      const trainerStatus = json.trainerStatus as "pending" | "approved" | "rejected" | null
+
+      if (!onboardingCompleted) {
+        setSuccess("Email verified! Redirecting to onboarding...")
+        router.replace("/onboarding")
+        return
+      }
+
       if (accountType === "trainer") {
+        if (trainerStatus === "rejected") {
+          setSuccess("Email verified. Redirecting to application status...")
+          router.replace("/trainer-rejected")
+          return
+        }
+
+        if (trainerStatus === "approved") {
+          setSuccess("Email verified. Redirecting to trainer dashboard...")
+          router.replace("/trainer")
+          return
+        }
+
         setSuccess("Email verified. Redirecting to application status...")
         router.replace("/trainer-pending")
       } else {
-        setSuccess("Email verified! Redirecting to onboarding...")
-        router.replace("/onboarding")
+        setSuccess("Email verified! Redirecting to dashboard...")
+        router.replace("/dashboard")
       }
     } catch {
       setError("Verification failed. Please try again.")

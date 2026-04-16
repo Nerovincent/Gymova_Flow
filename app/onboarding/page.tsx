@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dumbbell, ArrowRight, CheckCircle2 } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 import { upsertClientGoals } from "@/lib/supabase/clientGoals"
-import { getRoleRedirectPath } from "@/lib/trainerAuth"
+import { getRoleRedirectPath, getUserProfile } from "@/lib/trainerAuth"
 
 const FITNESS_GOALS = ["Weight Loss", "Muscle Gain", "Flexibility", "Endurance", "General Fitness", "Sports Performance"]
 const EXPERIENCE_LEVELS = ["Beginner", "Intermediate", "Advanced"]
@@ -46,20 +46,17 @@ export default function OnboardingPage() {
         return
       }
 
-      // Skip onboarding if already completed
-      const onboardingCompleted =
-        (user.user_metadata as { onboarding_completed?: boolean } | undefined)
-          ?.onboarding_completed === true
+      const profile = await getUserProfile(user.id)
+      const onboardingCompleted = profile?.onboarding_completed === true
       if (onboardingCompleted) {
         const redirectPath = await getRoleRedirectPath(user.id)
         router.replace(redirectPath)
         return
       }
 
-      const type =
+      const metadataType =
         (user.user_metadata as { account_type?: string } | undefined)?.account_type === "trainer"
-          ? "trainer"
-          : "client"
+      const type = profile?.role === "trainer" || metadataType ? "trainer" : "client"
       setAccountType(type)
       setIsLoading(false)
     }
@@ -84,16 +81,46 @@ export default function OnboardingPage() {
       .from("profiles")
       .upsert({ id: userId, full_name: fullName, role: "client" }, { onConflict: "id" })
 
-    const { error: goalsError } = await upsertClientGoals(userId, {
+    const goalsPayload = {
       primary_goal: primaryGoal,
       experience_level: experienceLevel,
       preferred_training_style: trainingStyle,
       workout_days_per_week: workoutDays ? parseInt(workoutDays, 10) : null,
       notes: notes || null,
-    })
+    }
+
+    const { error: goalsError } = await upsertClientGoals(userId, goalsPayload)
 
     if (goalsError) {
       setError("Failed to save your preferences. Please try again.")
+      return false
+    }
+
+    const onboardingDetails = {
+      account_type: "client",
+      signup: {
+        full_name: fullName,
+        email,
+      },
+      client: goalsPayload,
+    }
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert(
+        {
+          id: userId,
+          full_name: fullName,
+          role: "client",
+          onboarding_completed: true,
+          onboarding_completed_at: new Date().toISOString(),
+          onboarding_details: onboardingDetails,
+        },
+        { onConflict: "id" }
+      )
+
+    if (profileError) {
+      setError("Failed to save onboarding status. Please try again.")
       return false
     }
 
@@ -161,15 +188,10 @@ export default function OnboardingPage() {
 
       if (!success) return
 
-      // Mark onboarding as completed in user metadata
-      await supabase.auth.updateUser({
-        data: { onboarding_completed: true },
-      })
-
       if (accountType === "trainer") {
         // Sign out trainer — they need admin approval before accessing the platform
         await supabase.auth.signOut()
-        router.replace(`/verify-email?email=${encodeURIComponent(email)}&type=trainer`)
+        router.replace("/trainer-pending")
       } else {
         const redirectPath = await getRoleRedirectPath(user.id)
         router.replace(redirectPath)

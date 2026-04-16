@@ -27,7 +27,24 @@ export async function POST(request: NextRequest) {
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .upsert(
-        { id: userId, full_name: fullName, role: "trainer", trainer_status: "pending" },
+        {
+          id: userId,
+          full_name: fullName,
+          role: "trainer",
+          trainer_status: "pending",
+          onboarding_completed: true,
+          onboarding_completed_at: new Date().toISOString(),
+          onboarding_details: {
+            account_type: "trainer",
+            trainer: {
+              specializations: Array.isArray(specializations) ? specializations : [],
+              certifications: certifications || null,
+              experience: experience || null,
+              hourly_rate: hourlyRate ? Number(hourlyRate) : null,
+              bio: bio || null,
+            },
+          },
+        },
         { onConflict: "id" }
       )
 

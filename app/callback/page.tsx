@@ -3,7 +3,8 @@
 import { useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
-import { getRoleRedirectPath } from "@/lib/trainerAuth"
+import { getUserProfile } from "@/lib/trainerAuth"
+import { getDashboardRouteForProfile } from "@/lib/rbac"
 import { Dumbbell } from "lucide-react"
 
 export default function AuthCallbackPage() {
@@ -36,22 +37,33 @@ export default function AuthCallbackPage() {
         return
       }
 
-      handleRedirect(data.session.user)
+      await handleRedirect(data.session.user)
     }
 
-    const handleRedirect = async (user: any) => {
+    const handleRedirect = async (user: { id: string; email_confirmed_at?: string | null }) => {
       handled.current = true
-      
-      // Check onboarding status from user metadata
-      const onboardingCompleted = user.user_metadata?.onboarding_completed === true
 
-      if (!onboardingCompleted) {
+      if (user.email_confirmed_at) {
+        await supabase
+          .from("profiles")
+          .upsert(
+            {
+              id: user.id,
+              is_verified: true,
+              email_verified_at: user.email_confirmed_at,
+            },
+            { onConflict: "id" }
+          )
+      }
+
+      const profile = await getUserProfile(user.id)
+      if (!profile?.onboarding_completed) {
         // New user or incomplete onboarding -> Go to Onboarding
         router.replace("/onboarding")
       } else {
         // Existing user -> Go to their specific dashboard based on DB role
         try {
-          const path = await getRoleRedirectPath(user.id)
+          const path = getDashboardRouteForProfile(profile)
           router.replace(path)
         } catch (err) {
           console.error("Error determining redirect path", err)

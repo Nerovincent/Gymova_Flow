@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
-import { sendEmail } from "@/lib/email"
-import { welcomeEmail } from "@/lib/email/templates"
-import { getUserByEmail } from "@/lib/getUserByEmail"
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,19 +42,40 @@ export async function POST(request: NextRequest) {
         : "client"
 
     // For clients: ensure their profile row exists.
-    if (accountType === "client") {
-      const fullName = (user.user_metadata as { full_name?: string } | undefined)?.full_name || email.split("@")[0]
+    const fullName =
+      (user.user_metadata as { full_name?: string } | undefined)?.full_name || email.split("@")[0]
+    const emailVerifiedAt = user.email_confirmed_at ?? new Date().toISOString()
 
-      const { error: profileError } = await supabaseAdmin
-        .from("profiles")
-        .upsert({ id: user.id, full_name: fullName, role: "client" }, { onConflict: "id" })
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .upsert(
+        {
+          id: user.id,
+          full_name: fullName,
+          role: accountType,
+          is_verified: true,
+          email_verified_at: emailVerifiedAt,
+        },
+        { onConflict: "id" }
+      )
 
-      if (profileError) {
-        console.error("[verify-email] Profile upsert failed:", profileError)
-      }
+    if (profileError) {
+      console.error("[verify-email] Profile upsert failed:", profileError)
     }
 
-    return NextResponse.json({ success: true, accountType, session: verifyData.session })
+    const { data: profileState } = await supabaseAdmin
+      .from("profiles")
+      .select("onboarding_completed, trainer_status")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    return NextResponse.json({
+      success: true,
+      accountType,
+      session: verifyData.session,
+      onboardingCompleted: profileState?.onboarding_completed === true,
+      trainerStatus: profileState?.trainer_status ?? null,
+    })
   } catch (err) {
     console.error("Unexpected error in verify-email route:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

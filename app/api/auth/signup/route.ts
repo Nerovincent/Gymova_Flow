@@ -51,6 +51,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: signUpError.message }, { status: 500 })
     }
 
+    if (linkData?.user?.id) {
+      const { error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .upsert(
+          {
+            id: linkData.user.id,
+            full_name: fullName,
+            role: accountType,
+            onboarding_completed: false,
+            is_verified: false,
+            onboarding_details: {
+              account_type: accountType,
+              signup: {
+                full_name: fullName,
+                email,
+              },
+            },
+          },
+          { onConflict: "id" }
+        )
+
+      if (profileError) {
+        console.error("[signup] Profile upsert failed:", profileError)
+      }
+    }
+
     // Now send the custom verification email using the OTP returned
     if (linkData?.properties?.email_otp) {
       try {
