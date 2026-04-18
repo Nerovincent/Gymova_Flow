@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { isMissingProfileColumnError } from "@/lib/supabase/profileSchema"
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +35,8 @@ export async function POST(request: NextRequest) {
           full_name: fullName,
           role: "trainer",
           trainer_status: "pending",
+          onboarding_completed: true,
+          onboarding_completed_at: completedAt,
           onboarding_details: {
             onboarding_completed: true,
             onboarding_completed_at: completedAt,
@@ -55,11 +58,33 @@ export async function POST(request: NextRequest) {
       )
 
     if (profileError) {
+      if (isMissingProfileColumnError(profileError)) {
+        const { error: fallbackProfileError } = await supabaseAdmin
+          .from("profiles")
+          .upsert(
+            {
+              id: userId,
+              full_name: fullName,
+              role: "trainer",
+              trainer_status: "pending",
+            },
+            { onConflict: "id" }
+          )
+
+        if (fallbackProfileError) {
+          console.error("Trainer fallback profile upsert failed:", fallbackProfileError)
+          return NextResponse.json(
+            { error: "Failed to create trainer profile: " + fallbackProfileError.message },
+            { status: 500 }
+          )
+        }
+      } else {
       console.error("Trainer profile upsert failed:", profileError)
       return NextResponse.json(
         { error: "Failed to create trainer profile: " + profileError.message },
         { status: 500 }
       )
+      }
     }
 
     // Insert trainer application for admin review.

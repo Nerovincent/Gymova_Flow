@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dumbbell, ArrowRight, CheckCircle2 } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 import { upsertClientGoals } from "@/lib/supabase/clientGoals"
+import { isMissingProfileColumnError } from "@/lib/supabase/profileSchema"
 import { getRoleRedirectPath, getUserProfile } from "@/lib/trainerAuth"
 
 const FITNESS_GOALS = ["Weight Loss", "Muscle Gain", "Flexibility", "Endurance", "General Fitness", "Sports Performance"]
@@ -47,7 +48,9 @@ export default function OnboardingPage() {
       }
 
       const profile = await getUserProfile(user.id)
-      const onboardingCompleted = profile?.onboarding_completed === true
+      const metadataOnboardingCompleted =
+        ((user.user_metadata as { onboarding_completed?: unknown } | undefined)?.onboarding_completed) === true
+      const onboardingCompleted = profile?.onboarding_completed === true || metadataOnboardingCompleted
       if (onboardingCompleted) {
         const redirectPath = await getRoleRedirectPath(user.id)
         router.replace(redirectPath)
@@ -114,14 +117,34 @@ export default function OnboardingPage() {
           id: userId,
           full_name: fullName,
           role: "client",
+          onboarding_completed: true,
+          onboarding_completed_at: completedAt,
           onboarding_details: onboardingDetails,
         },
         { onConflict: "id" }
       )
 
     if (profileError) {
-      setError("Failed to save onboarding status. Please try again.")
-      return false
+      if (!isMissingProfileColumnError(profileError)) {
+        setError("Failed to save onboarding status. Please try again.")
+        return false
+      }
+
+      const { error: fallbackProfileError } = await supabase
+        .from("profiles")
+        .upsert(
+          {
+            id: userId,
+            full_name: fullName,
+            role: "client",
+          },
+          { onConflict: "id" }
+        )
+
+      if (fallbackProfileError) {
+        setError("Failed to save onboarding status. Please try again.")
+        return false
+      }
     }
 
     return true
@@ -177,6 +200,41 @@ export default function OnboardingPage() {
         user.email?.split("@")[0] ||
         "User"
       const email = user.email ?? ""
+      const completedAt = new Date().toISOString()
+      const onboardingDetails =
+        accountType === "trainer"
+          ? {
+              onboarding_completed: true,
+              onboarding_completed_at: completedAt,
+              account_type: "trainer",
+              signup: {
+                full_name: fullName,
+                email,
+              },
+              trainer: {
+                specializations: selectedSpecializations,
+                certifications: certifications || null,
+                experience: experience || null,
+                hourly_rate: hourlyRate ? Number(hourlyRate) : null,
+                bio: bio || null,
+              },
+            }
+          : {
+              onboarding_completed: true,
+              onboarding_completed_at: completedAt,
+              account_type: "client",
+              signup: {
+                full_name: fullName,
+                email,
+              },
+              client: {
+                primary_goal: primaryGoal,
+                experience_level: experienceLevel,
+                preferred_training_style: trainingStyle,
+                workout_days_per_week: workoutDays ? parseInt(workoutDays, 10) : null,
+                notes: notes || null,
+              },
+            }
 
       let success = false
 
@@ -187,6 +245,21 @@ export default function OnboardingPage() {
       }
 
       if (!success) return
+
+      const existingMetadata = (user.user_metadata ?? {}) as Record<string, unknown>
+      const { error: metadataError } = await supabase.auth.updateUser({
+        data: {
+          ...existingMetadata,
+          onboarding_completed: true,
+          onboarding_completed_at: completedAt,
+          onboarding_details: onboardingDetails,
+        },
+      })
+
+      if (metadataError) {
+        setError("Failed to save onboarding status. Please try again.")
+        return
+      }
 
       if (accountType === "trainer") {
         // Sign out trainer — they need admin approval before accessing the platform

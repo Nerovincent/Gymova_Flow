@@ -35,19 +35,6 @@ export default function LoginPage() {
       const profile = await getUserProfile(session.user.id)
       const isVerified = profile?.is_verified === true || Boolean(session.user.email_confirmed_at)
 
-      if (session.user.email_confirmed_at && profile?.is_verified !== true) {
-        await supabase
-          .from("profiles")
-          .upsert(
-            {
-              id: session.user.id,
-              is_verified: true,
-              email_verified_at: session.user.email_confirmed_at,
-            },
-            { onConflict: "id" }
-          )
-      }
-
       if (!isVerified) {
         const accountType =
           (session.user.user_metadata as { account_type?: string } | undefined)
@@ -60,7 +47,10 @@ export default function LoginPage() {
 
       if (isHandlingSubmit.current) return
 
-      if (!profile?.onboarding_completed) {
+      const metadataOnboardingCompleted =
+        ((session.user.user_metadata as { onboarding_completed?: unknown } | undefined)?.onboarding_completed) === true
+
+      if (!profile?.onboarding_completed && !metadataOnboardingCompleted) {
         router.replace("/onboarding")
         return
       }
@@ -121,19 +111,6 @@ export default function LoginPage() {
     const profile = await getUserProfile(userId)
     const isVerified = profile?.is_verified === true || Boolean(data.user.email_confirmed_at)
 
-    if (data.user.email_confirmed_at && profile?.is_verified !== true) {
-      await supabase
-        .from("profiles")
-        .upsert(
-          {
-            id: userId,
-            is_verified: true,
-            email_verified_at: data.user.email_confirmed_at,
-          },
-          { onConflict: "id" }
-        )
-    }
-
     if (!isVerified) {
       const accountType =
         (data.user.user_metadata as { account_type?: string } | undefined)
@@ -146,7 +123,10 @@ export default function LoginPage() {
       return
     }
 
-    if (!profile?.onboarding_completed) {
+    const metadataOnboardingCompleted =
+      ((data.user.user_metadata as { onboarding_completed?: unknown } | undefined)?.onboarding_completed) === true
+
+    if (!profile?.onboarding_completed && !metadataOnboardingCompleted) {
       setIsLoading(false)
       router.replace("/onboarding")
       return

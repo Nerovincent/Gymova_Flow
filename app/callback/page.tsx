@@ -43,21 +43,12 @@ export default function AuthCallbackPage() {
     const handleRedirect = async (user: { id: string; email_confirmed_at?: string | null }) => {
       handled.current = true
 
-      if (user.email_confirmed_at) {
-        await supabase
-          .from("profiles")
-          .upsert(
-            {
-              id: user.id,
-              is_verified: true,
-              email_verified_at: user.email_confirmed_at,
-            },
-            { onConflict: "id" }
-          )
-      }
-
       const profile = await getUserProfile(user.id)
-      if (!profile?.onboarding_completed) {
+      const { data: userData } = await supabase.auth.getUser()
+      const metadataOnboardingCompleted =
+        ((userData.user?.user_metadata as { onboarding_completed?: unknown } | undefined)?.onboarding_completed) === true
+
+      if (!profile?.onboarding_completed && !metadataOnboardingCompleted) {
         // New user or incomplete onboarding -> Go to Onboarding
         router.replace("/onboarding")
       } else {

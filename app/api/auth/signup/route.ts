@@ -59,15 +59,6 @@ export async function POST(request: NextRequest) {
             id: linkData.user.id,
             full_name: fullName,
             role: accountType,
-            is_verified: false,
-            onboarding_details: {
-              onboarding_completed: false,
-              account_type: accountType,
-              signup: {
-                full_name: fullName,
-                email,
-              },
-            },
           },
           { onConflict: "id" }
         )

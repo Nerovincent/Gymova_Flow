@@ -13,7 +13,7 @@ export async function getProfile(
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id, full_name, avatar_url, role, trainer_status, is_verified, email_verified_at, onboarding_details, created_at"
+      "id, full_name, avatar_url, role, trainer_status, created_at, onboarding_completed, onboarding_completed_at, is_verified, email_verified_at, onboarding_details"
     )
     .eq("id", userId)
     .maybeSingle()
@@ -21,10 +21,32 @@ export async function getProfile(
   if (error) return { data: null, error: error.message }
   if (!data) return { data: null, error: null }
 
+  const row = data as {
+    id: string
+    full_name: string | null
+    avatar_url: string | null
+    role: Profile["role"]
+    trainer_status: Profile["trainer_status"]
+    created_at: string | null
+    onboarding_completed: boolean | null
+    onboarding_completed_at: string | null
+    is_verified: boolean | null
+    email_verified_at: string | null
+    onboarding_details: Record<string, unknown> | null
+  }
+
   const normalized: Profile = {
-    ...(data as Omit<Profile, "onboarding_completed" | "onboarding_completed_at">),
-    onboarding_completed: isOnboardingCompleted(data),
-    onboarding_completed_at: null,
+    id: row.id,
+    full_name: row.full_name,
+    avatar_url: row.avatar_url,
+    role: row.role,
+    trainer_status: row.trainer_status,
+    is_verified: row.is_verified === true,
+    email_verified_at: row.email_verified_at ?? null,
+    onboarding_details: row.onboarding_details ?? null,
+    created_at: row.created_at,
+    onboarding_completed: row.onboarding_completed === true || isOnboardingCompleted(data),
+    onboarding_completed_at: row.onboarding_completed_at ?? null,
   }
   return { data: normalized, error: null }
 }

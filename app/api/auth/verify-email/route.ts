@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { isOnboardingCompleted } from "@/lib/onboarding"
+import { isMissingProfileColumnError } from "@/lib/supabase/profileSchema"
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,8 +46,6 @@ export async function POST(request: NextRequest) {
     // For clients: ensure their profile row exists.
     const fullName =
       (user.user_metadata as { full_name?: string } | undefined)?.full_name || email.split("@")[0]
-    const emailVerifiedAt = user.email_confirmed_at ?? new Date().toISOString()
-
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .upsert(
@@ -54,8 +53,6 @@ export async function POST(request: NextRequest) {
           id: user.id,
           full_name: fullName,
           role: accountType,
-          is_verified: true,
-          email_verified_at: emailVerifiedAt,
         },
         { onConflict: "id" }
       )
@@ -64,18 +61,43 @@ export async function POST(request: NextRequest) {
       console.error("[verify-email] Profile upsert failed:", profileError)
     }
 
-    const { data: profileState } = await supabaseAdmin
+    const metadataOnboardingCompleted =
+      ((user.user_metadata as { onboarding_completed?: unknown } | undefined)?.onboarding_completed) === true
+
+    let onboardingCompleted = metadataOnboardingCompleted
+    let trainerStatus: "pending" | "approved" | "rejected" | null = null
+
+    const { data: profileState, error: profileStateError } = await supabaseAdmin
       .from("profiles")
-      .select("onboarding_details, trainer_status")
+      .select("onboarding_completed, onboarding_details, trainer_status")
       .eq("id", user.id)
       .maybeSingle()
+
+    if (profileStateError && !isMissingProfileColumnError(profileStateError)) {
+      console.error("[verify-email] Profile state query failed:", profileStateError)
+    }
+
+    if (profileStateError && isMissingProfileColumnError(profileStateError)) {
+      const { data: fallbackProfileState } = await supabaseAdmin
+        .from("profiles")
+        .select("trainer_status")
+        .eq("id", user.id)
+        .maybeSingle()
+      trainerStatus = (fallbackProfileState?.trainer_status as "pending" | "approved" | "rejected" | null | undefined) ?? null
+    } else {
+      onboardingCompleted =
+        onboardingCompleted ||
+        profileState?.onboarding_completed === true ||
+        isOnboardingCompleted(profileState)
+      trainerStatus = (profileState?.trainer_status as "pending" | "approved" | "rejected" | null | undefined) ?? null
+    }
 
     return NextResponse.json({
       success: true,
       accountType,
       session: verifyData.session,
-      onboardingCompleted: isOnboardingCompleted(profileState),
-      trainerStatus: profileState?.trainer_status ?? null,
+      onboardingCompleted,
+      trainerStatus,
     })
   } catch (err) {
     console.error("Unexpected error in verify-email route:", err)
