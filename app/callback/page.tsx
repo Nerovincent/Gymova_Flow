@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
 import { getUserProfile } from "@/lib/trainerAuth"
 import { getDashboardRouteForProfile } from "@/lib/rbac"
+import { clearAdminSession, createAdminSession } from "@/app/admin/actions"
 import { Dumbbell } from "lucide-react"
 
 export default function AuthCallbackPage() {
@@ -55,6 +56,16 @@ export default function AuthCallbackPage() {
         // Existing user -> Go to their specific dashboard based on DB role
         try {
           const path = getDashboardRouteForProfile(profile)
+          if (path.startsWith("/admin")) {
+            const result = await createAdminSession(user.id)
+            if (result.error) {
+              await clearAdminSession()
+              router.replace("/dashboard")
+              return
+            }
+          } else {
+            await clearAdminSession()
+          }
           router.replace(path)
         } catch (err) {
           console.error("Error determining redirect path", err)

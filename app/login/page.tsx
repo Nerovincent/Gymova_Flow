@@ -12,7 +12,7 @@ import { supabase } from "@/lib/supabaseClient"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { getUserProfile } from "@/lib/trainerAuth"
 import { getDashboardRouteForProfile } from "@/lib/rbac"
-import { createAdminSession } from "@/app/admin/actions"
+import { clearAdminSession, createAdminSession } from "@/app/admin/actions"
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton"
 
 export default function LoginPage() {
@@ -57,7 +57,14 @@ export default function LoginPage() {
 
       const redirectPath = getDashboardRouteForProfile(profile)
       if (redirectPath.startsWith("/admin")) {
-        await createAdminSession(session.user.id)
+        const result = await createAdminSession(session.user.id)
+        if (result.error) {
+          await clearAdminSession()
+          router.replace("/dashboard")
+          return
+        }
+      } else {
+        await clearAdminSession()
       }
       router.replace(redirectPath)
     }
@@ -136,7 +143,15 @@ export default function LoginPage() {
 
     // For admin users, establish the admin session cookie before redirecting.
     if (redirectPath.startsWith("/admin")) {
-      await createAdminSession(userId)
+      const result = await createAdminSession(userId)
+      if (result.error) {
+        await clearAdminSession()
+        setIsLoading(false)
+        router.replace("/dashboard")
+        return
+      }
+    } else {
+      await clearAdminSession()
     }
 
     setIsLoading(false)

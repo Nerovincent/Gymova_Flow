@@ -10,7 +10,7 @@ export function proxy(request: NextRequest) {
   }
   const loggedIn = request.cookies.get(ADMIN_COOKIE_NAME)?.value
   if (!loggedIn) {
-    return NextResponse.redirect(new URL("/login", request.url))
+    return NextResponse.redirect(new URL("/dashboard", request.url))
   }
   return NextResponse.next()
 }

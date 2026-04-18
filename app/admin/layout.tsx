@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { DashboardSidebar, DashboardSidebarLink } from "@/components/dashboard/Sidebar"
 import { DashboardTopNav } from "@/components/dashboard/TopNav"
+import { RoleGate } from "@/components/auth/RoleGate"
 import { adminLogout } from "./actions"
 import { supabase } from "@/lib/supabaseClient"
 
@@ -40,26 +41,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <DashboardSidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        userName="Admin User"
-        userEmail="admin@gymovaflow.com"
-        onLogout={handleLogout}
-        links={sidebarLinks}
-        title="GymovaFlow"
-        signedInAs="admin"
-        homeHref="/admin"
-      />
-      <DashboardTopNav
-        onMenuClick={() => setSidebarOpen(true)}
-        onLogout={handleLogout}
-        title={getAdminTitle(pathname)}
-      />
-      <main className="lg:pl-64 pt-16">
-        <div className="p-4 lg:p-8">{children}</div>
-      </main>
-    </div>
+    <RoleGate allowedRoles={["admin"]} requireApprovedTrainer={false} loadingMessage="Checking admin access...">
+      <div className="min-h-screen bg-background">
+        <DashboardSidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          userName="Admin User"
+          userEmail="admin@gymovaflow.com"
+          onLogout={handleLogout}
+          links={sidebarLinks}
+          title="GymovaFlow"
+          signedInAs="admin"
+          homeHref="/admin"
+        />
+        <DashboardTopNav
+          onMenuClick={() => setSidebarOpen(true)}
+          onLogout={handleLogout}
+          title={getAdminTitle(pathname)}
+        />
+        <main className="lg:pl-64 pt-16">
+          <div className="p-4 lg:p-8">{children}</div>
+        </main>
+      </div>
+    </RoleGate>
   )
 }
