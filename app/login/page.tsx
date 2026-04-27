@@ -3,17 +3,17 @@
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { Eye, EyeOff, Dumbbell, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Dumbbell, Eye, EyeOff, ArrowRight } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
-import { useAuth } from "@/components/auth/AuthProvider"
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton"
 import { getUserProfile } from "@/lib/trainerAuth"
 import { getDashboardRouteForProfile } from "@/lib/rbac"
-import { clearAdminSession, createAdminSession } from "@/app/admin/actions"
-import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton"
+import { useAuth } from "@/components/auth/AuthProvider"
+import { createAdminSession, clearAdminSession } from "./actions"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -56,6 +56,10 @@ export default function LoginPage() {
       }
 
       const redirectPath = getDashboardRouteForProfile(profile)
+
+      // Prevent infinite loop if already on the correct path
+      if (window.location.pathname === redirectPath) return
+
       if (redirectPath.startsWith("/admin")) {
         const result = await createAdminSession(session.user.id)
         if (result.error) {
