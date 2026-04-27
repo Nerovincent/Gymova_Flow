@@ -79,11 +79,6 @@ export default function OnboardingPage() {
       return false
     }
 
-    // Ensure client profile exists
-    await supabase
-      .from("profiles")
-      .upsert({ id: userId, full_name: fullName, role: "client" }, { onConflict: "id" })
-
     const goalsPayload = {
       primary_goal: primaryGoal,
       experience_level: experienceLevel,
@@ -125,26 +120,9 @@ export default function OnboardingPage() {
       )
 
     if (profileError) {
-      if (!isMissingProfileColumnError(profileError)) {
-        setError("Failed to save onboarding status. Please try again.")
-        return false
-      }
-
-      const { error: fallbackProfileError } = await supabase
-        .from("profiles")
-        .upsert(
-          {
-            id: userId,
-            full_name: fullName,
-            role: "client",
-          },
-          { onConflict: "id" }
-        )
-
-      if (fallbackProfileError) {
-        setError("Failed to save onboarding status. Please try again.")
-        return false
-      }
+      console.error("Client profile onboarding update failed:", profileError)
+      setError("Failed to update profile. Please try again.")
+      return false
     }
 
     return true
@@ -201,40 +179,6 @@ export default function OnboardingPage() {
         "User"
       const email = user.email ?? ""
       const completedAt = new Date().toISOString()
-      const onboardingDetails =
-        accountType === "trainer"
-          ? {
-              onboarding_completed: true,
-              onboarding_completed_at: completedAt,
-              account_type: "trainer",
-              signup: {
-                full_name: fullName,
-                email,
-              },
-              trainer: {
-                specializations: selectedSpecializations,
-                certifications: certifications || null,
-                experience: experience || null,
-                hourly_rate: hourlyRate ? Number(hourlyRate) : null,
-                bio: bio || null,
-              },
-            }
-          : {
-              onboarding_completed: true,
-              onboarding_completed_at: completedAt,
-              account_type: "client",
-              signup: {
-                full_name: fullName,
-                email,
-              },
-              client: {
-                primary_goal: primaryGoal,
-                experience_level: experienceLevel,
-                preferred_training_style: trainingStyle,
-                workout_days_per_week: workoutDays ? parseInt(workoutDays, 10) : null,
-                notes: notes || null,
-              },
-            }
 
       let success = false
 
@@ -252,7 +196,6 @@ export default function OnboardingPage() {
           ...existingMetadata,
           onboarding_completed: true,
           onboarding_completed_at: completedAt,
-          onboarding_details: onboardingDetails,
         },
       })
 
@@ -262,8 +205,6 @@ export default function OnboardingPage() {
       }
 
       if (accountType === "trainer") {
-        // Sign out trainer — they need admin approval before accessing the platform
-        await supabase.auth.signOut()
         router.replace("/trainer-pending")
       } else {
         const redirectPath = await getRoleRedirectPath(user.id)
@@ -286,10 +227,10 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-8">
-      <div className="w-full max-w-xl space-y-8">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-xl space-y-8 bg-card p-8 rounded-2xl border border-border shadow-sm">
         {/* Logo */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 justify-center">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
             <Dumbbell className="h-5 w-5 text-primary-foreground" />
           </div>
@@ -297,11 +238,11 @@ export default function OnboardingPage() {
         </div>
 
         {/* Header */}
-        <div className="space-y-2">
+        <div className="space-y-2 text-center">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
             {accountType === "trainer" ? "Tell us about yourself" : "Personalize your experience"}
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-center mx-auto max-w-md">
             {accountType === "trainer"
               ? "Complete your trainer profile so we can review your application."
               : "Help us match you with the perfect trainer."}
