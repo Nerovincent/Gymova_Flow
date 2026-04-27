@@ -13,7 +13,7 @@ import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton"
 import { getUserProfile } from "@/lib/trainerAuth"
 import { getDashboardRouteForProfile } from "@/lib/rbac"
 import { useAuth } from "@/components/auth/AuthProvider"
-import { createAdminSession, clearAdminSession } from "./actions"
+import { createAdminSession, clearAdminSession } from "@/app/admin/actions"
 
 export default function LoginPage() {
   const router = useRouter()
