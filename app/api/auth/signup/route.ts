@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
           account_type: accountType,
           onboarding_completed: false,
         },
-        redirectTo: `${request.nextUrl.origin}/login?verified=true`,
+        redirectTo: `${request.nextUrl.origin}/callback`,
       },
     })
 

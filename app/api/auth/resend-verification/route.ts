@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       type: "signup",
       email: email,
       options: {
-        emailRedirectTo: `${request.nextUrl.origin}/login?verified=true`,
+        emailRedirectTo: `${request.nextUrl.origin}/callback`,
       }
     })
 

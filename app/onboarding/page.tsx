@@ -10,6 +10,7 @@ import { Dumbbell, ArrowRight, CheckCircle2 } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 import { upsertClientGoals } from "@/lib/supabase/clientGoals"
 import { isMissingProfileColumnError } from "@/lib/supabase/profileSchema"
+import { useAuth } from "@/components/auth/AuthProvider"
 import { getRoleRedirectPath, getUserProfile } from "@/lib/trainerAuth"
 
 const FITNESS_GOALS = ["Weight Loss", "Muscle Gain", "Flexibility", "Endurance", "General Fitness", "Sports Performance"]
@@ -19,6 +20,7 @@ const SPECIALIZATIONS = ["Weight Training", "HIIT", "Yoga", "Pilates", "Boxing",
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const { user, loading, session } = useAuth()
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [accountType, setAccountType] = useState<"client" | "trainer">("client")
@@ -39,18 +41,19 @@ export default function OnboardingPage() {
   const [bio, setBio] = useState("")
 
   useEffect(() => {
+    if (loading) return
+
+    if (!user) {
+      router.replace("/login")
+      return
+    }
+
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.replace("/login")
-        return
-      }
-
       const profile = await getUserProfile(user.id)
       const metadataOnboardingCompleted =
         ((user.user_metadata as { onboarding_completed?: unknown } | undefined)?.onboarding_completed) === true
       const onboardingCompleted = profile?.onboarding_completed === true || metadataOnboardingCompleted
+      
       if (onboardingCompleted) {
         const redirectPath = await getRoleRedirectPath(user.id)
         router.replace(redirectPath)
@@ -65,7 +68,7 @@ export default function OnboardingPage() {
     }
 
     void init()
-  }, [router])
+  }, [loading, user, router])
 
   const toggleSpecialization = (spec: string) => {
     setSelectedSpecializations((prev) =>
@@ -196,6 +199,8 @@ export default function OnboardingPage() {
       if (accountType === "trainer") {
         router.replace("/trainer-pending")
       } else {
+        // Force session refresh to pick up new metadata before redirecting
+        await supabase.auth.refreshSession()
         const redirectPath = await getRoleRedirectPath(user.id)
         router.replace(redirectPath)
       }
