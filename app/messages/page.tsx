@@ -278,8 +278,9 @@ export default function MessagesPage() {
   useEffect(() => {
     if (!user) return
 
+    const channelName = `messages-${Math.random().toString(36).slice(2, 9)}`
     const channel = supabase
-      .channel("messages")
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
