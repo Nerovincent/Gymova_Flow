@@ -12,9 +12,7 @@ import { useAuth } from "@/components/auth/AuthProvider"
 import { DashboardSidebar, DashboardSidebarLink } from "@/components/dashboard/Sidebar"
 import { DashboardTopNav } from "@/components/dashboard/TopNav"
 import { getDashboardRouteForProfile } from "@/lib/rbac"
-import { getProfile } from "@/lib/supabase/profiles"
 import { supabase } from "@/lib/supabaseClient"
-import type { Profile } from "@/types/profile"
 
 const sidebarLinks: DashboardSidebarLink[] = [
   { href: "/trainer/availability", label: "My availability", icon: Clock },
@@ -32,12 +30,10 @@ function getTrainerTitle(pathname: string): string {
 export default function TrainerLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [profileReady, setProfileReady] = useState(false)
 
   const router = useRouter()
   const pathname = usePathname()
-  const { session, loading } = useAuth()
+  const { session, loading, profile } = useAuth()
 
   useEffect(() => {
     if (loading) return
@@ -47,23 +43,19 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
       return
     }
 
-    getProfile(session.user.id).then(({ data }) => {
-      setProfile(data)
-      setProfileReady(true)
-
-      const nextPath = getDashboardRouteForProfile(data)
-      if (nextPath !== "/trainer" && pathname.startsWith("/trainer")) {
-        router.replace(nextPath)
-      }
-    })
-  }, [loading, pathname, router, session])
+    // Detect role changes and redirect to appropriate dashboard
+    const nextPath = getDashboardRouteForProfile(profile)
+    if (nextPath !== "/trainer" && pathname.startsWith("/trainer")) {
+      router.replace(nextPath)
+    }
+  }, [loading, pathname, router, session, profile])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.replace("/login")
   }
 
-  if (loading || !profileReady || !session) {
+  if (loading || !session || !profile) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <span className="text-muted-foreground">Loading trainer dashboard...</span>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { isMissingProfileColumnError } from "@/lib/supabase/profileSchema"
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,21 +23,68 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const completedAt = new Date().toISOString()
+
     // Upsert the profile row with trainer role and pending status.
     // Uses service role key — bypasses RLS regardless of email confirmation state.
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .upsert(
-        { id: userId, full_name: fullName, role: "trainer", trainer_status: "pending" },
+        {
+          id: userId,
+          full_name: fullName,
+          role: "trainer",
+          trainer_status: "pending",
+          onboarding_completed: true,
+          onboarding_completed_at: completedAt,
+          onboarding_details: {
+            onboarding_completed: true,
+            onboarding_completed_at: completedAt,
+            account_type: "trainer",
+            signup: {
+              full_name: fullName,
+              email,
+            },
+            trainer: {
+              specializations: Array.isArray(specializations) ? specializations : [],
+              certifications: certifications || null,
+              experience: experience || null,
+              hourly_rate: hourlyRate ? Number(hourlyRate) : null,
+              bio: bio || null,
+            },
+          },
+        },
         { onConflict: "id" }
       )
 
     if (profileError) {
+      if (isMissingProfileColumnError(profileError)) {
+        const { error: fallbackProfileError } = await supabaseAdmin
+          .from("profiles")
+          .upsert(
+            {
+              id: userId,
+              full_name: fullName,
+              role: "trainer",
+              trainer_status: "pending",
+            },
+            { onConflict: "id" }
+          )
+
+        if (fallbackProfileError) {
+          console.error("Trainer fallback profile upsert failed:", fallbackProfileError)
+          return NextResponse.json(
+            { error: "Failed to create trainer profile: " + fallbackProfileError.message },
+            { status: 500 }
+          )
+        }
+      } else {
       console.error("Trainer profile upsert failed:", profileError)
       return NextResponse.json(
         { error: "Failed to create trainer profile: " + profileError.message },
         { status: 500 }
       )
+      }
     }
 
     // Insert trainer application for admin review.

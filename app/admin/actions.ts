@@ -10,7 +10,7 @@ import { trainerApprovedEmail, trainerRejectedEmail } from "@/lib/email/template
 
 const ADMIN_COOKIE_NAME = "admin_session"
 
-const VALID_ROLES = ["student", "client", "trainer", "admin"] as const
+const VALID_ROLES = ["client", "trainer", "admin"] as const
 const VALID_TRAINER_STATUSES = ["pending", "approved", "rejected"] as const
 const AI_PROVIDER_CONFIGS = [
   { provider: "openai", display_name: "ChatGPT (OpenAI)", default_model: "gpt-4.1-mini" },
@@ -25,9 +25,21 @@ type ValidTrainerStatus = (typeof VALID_TRAINER_STATUSES)[number]
 
 export async function requireAdminSession() {
   const cookieStore = await cookies()
-  const session = cookieStore.get(ADMIN_COOKIE_NAME)?.value
-  if (!session) {
-    redirect("/login")
+  const adminUserId = cookieStore.get(ADMIN_COOKIE_NAME)?.value
+
+  if (!adminUserId) {
+    redirect("/dashboard")
+  }
+
+  const { data: profile, error } = await supabaseAdmin
+    .from("profiles")
+    .select("role")
+    .eq("id", adminUserId)
+    .maybeSingle()
+
+  if (error || profile?.role !== "admin") {
+    cookieStore.delete(ADMIN_COOKIE_NAME)
+    redirect("/dashboard")
   }
 }
 
@@ -47,7 +59,7 @@ export async function createAdminSession(userId: string): Promise<{ error?: stri
   }
 
   const cookieStore = await cookies()
-  cookieStore.set(ADMIN_COOKIE_NAME, "1", {
+  cookieStore.set(ADMIN_COOKIE_NAME, userId, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -62,6 +74,11 @@ export async function adminLogout() {
   const cookieStore = await cookies()
   cookieStore.delete(ADMIN_COOKIE_NAME)
   redirect("/login")
+}
+
+export async function clearAdminSession() {
+  const cookieStore = await cookies()
+  cookieStore.delete(ADMIN_COOKIE_NAME)
 }
 
 async function ensureTrainerRecord(userId: string) {

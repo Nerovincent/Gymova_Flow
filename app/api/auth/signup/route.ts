@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
           account_type: accountType,
           onboarding_completed: false,
         },
-        redirectTo: `${request.nextUrl.origin}/login?verified=true`,
+        redirectTo: `${request.nextUrl.origin}/callback`,
       },
     })
 
@@ -51,12 +51,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: signUpError.message }, { status: 500 })
     }
 
+    if (linkData?.user?.id) {
+      const { error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .upsert(
+          {
+            id: linkData.user.id,
+            full_name: fullName,
+            role: accountType,
+          },
+          { onConflict: "id" }
+        )
+
+      if (profileError) {
+        console.error("[signup] Profile upsert failed:", profileError)
+      }
+    }
+
     // Now send the custom verification email using the OTP returned
     if (linkData?.properties?.email_otp) {
       try {
         const { sendEmail } = await import("@/lib/email")
         const { verificationEmail } = await import("@/lib/email/templates")
-        
+
         await sendEmail({
           to: email,
           subject: "Verify your email – GymovaFlow",
@@ -68,8 +85,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       userId: linkData?.user?.id,
       confirmationRequired: true // signup always requires confirmation
     })

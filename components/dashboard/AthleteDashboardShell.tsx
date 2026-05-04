@@ -116,22 +116,9 @@ export function AthleteDashboardShell({
     )
   }
 
-  if (profile?.role === "trainer" && profile?.trainer_status === "pending") {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-8">
-        <div className="max-w-md w-full text-center space-y-6">
-          <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-6">
-            <h1 className="text-xl font-semibold text-foreground mb-2">Application under review</h1>
-            <p className="text-muted-foreground text-sm">
-              Your trainer application is being reviewed. You will be notified when it is accepted.
-            </p>
-          </div>
-          <Button variant="outline" className="w-full border-border" onClick={handleLogout}>
-            Sign out
-          </Button>
-        </div>
-      </div>
-    )
+  if (profile?.role === "trainer" && profile?.trainer_status === "pending" && pathname.startsWith("/dashboard")) {
+    router.replace("/trainer-pending")
+    return null
   }
 
   return (

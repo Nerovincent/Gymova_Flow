@@ -1,4 +1,6 @@
 import { supabase } from "@/lib/supabaseClient"
+import { isOnboardingCompleted } from "@/lib/onboarding"
+import { isMissingProfileColumnError } from "@/lib/supabase/profileSchema"
 import type { Profile } from "@/types/profile"
 
 const AVATAR_BUCKET = "avatars"
@@ -9,14 +11,48 @@ const AVATAR_BUCKET = "avatars"
 export async function getProfile(
   userId: string
 ): Promise<{ data: Profile | null; error: string | null }> {
-  const { data, error } = await supabase
+  // Try fetching with all columns first (the ideal schema)
+  const fullSelect = "id, full_name, avatar_url, role, trainer_status, created_at, onboarding_completed, onboarding_completed_at, is_verified, verified_at, onboarding_details"
+  
+  let { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, avatar_url, role, trainer_status, created_at")
+    .select(fullSelect)
     .eq("id", userId)
     .maybeSingle()
 
+  // If it fails because of missing columns (likely migrations not run), fallback to base columns
+  if (error && isMissingProfileColumnError(error)) {
+    console.warn("[getProfile] Falling back to base columns due to missing schema fields:", error.message)
+    const fallbackSelect = "id, full_name, avatar_url, role, trainer_status, created_at"
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from("profiles")
+      .select(fallbackSelect)
+      .eq("id", userId)
+      .maybeSingle()
+    
+    data = fallbackData
+    error = fallbackError
+  }
+
   if (error) return { data: null, error: error.message }
-  return { data: data as Profile | null, error: null }
+  if (!data) return { data: null, error: null }
+
+  const row = data as any // Use any for mapping flexibility
+
+  const normalized: Profile = {
+    id: row.id,
+    full_name: row.full_name,
+    avatar_url: row.avatar_url,
+    role: row.role,
+    trainer_status: row.trainer_status,
+    is_verified: row.is_verified === true,
+    verified_at: row.verified_at ?? null,
+    onboarding_details: row.onboarding_details ?? null,
+    created_at: row.created_at,
+    onboarding_completed: row.onboarding_completed === true || isOnboardingCompleted(data),
+    onboarding_completed_at: row.onboarding_completed_at ?? null,
+  }
+  return { data: normalized, error: null }
 }
 
 /**

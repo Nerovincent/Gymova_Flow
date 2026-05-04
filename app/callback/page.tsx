@@ -3,7 +3,9 @@
 import { useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
-import { getRoleRedirectPath } from "@/lib/trainerAuth"
+import { getUserProfile } from "@/lib/trainerAuth"
+import { getDashboardRouteForProfile } from "@/lib/rbac"
+import { clearAdminSession, createAdminSession } from "@/app/admin/actions"
 import { Dumbbell } from "lucide-react"
 
 export default function AuthCallbackPage() {
@@ -36,22 +38,34 @@ export default function AuthCallbackPage() {
         return
       }
 
-      handleRedirect(data.session.user)
+      await handleRedirect(data.session.user)
     }
 
-    const handleRedirect = async (user: any) => {
+    const handleRedirect = async (user: { id: string; email_confirmed_at?: string | null }) => {
       handled.current = true
-      
-      // Check onboarding status from user metadata
-      const onboardingCompleted = user.user_metadata?.onboarding_completed === true
 
-      if (!onboardingCompleted) {
+      const profile = await getUserProfile(user.id)
+      const { data: userData } = await supabase.auth.getUser()
+      const metadataOnboardingCompleted =
+        ((userData.user?.user_metadata as { onboarding_completed?: unknown } | undefined)?.onboarding_completed) === true
+
+      if (!profile?.onboarding_completed && !metadataOnboardingCompleted) {
         // New user or incomplete onboarding -> Go to Onboarding
         router.replace("/onboarding")
       } else {
         // Existing user -> Go to their specific dashboard based on DB role
         try {
-          const path = await getRoleRedirectPath(user.id)
+          const path = getDashboardRouteForProfile(profile)
+          if (path.startsWith("/admin")) {
+            const result = await createAdminSession(user.id)
+            if (result.error) {
+              await clearAdminSession()
+              router.replace("/dashboard")
+              return
+            }
+          } else {
+            await clearAdminSession()
+          }
           router.replace(path)
         } catch (err) {
           console.error("Error determining redirect path", err)

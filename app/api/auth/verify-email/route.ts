@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
-import { sendEmail } from "@/lib/email"
-import { welcomeEmail } from "@/lib/email/templates"
-import { getUserByEmail } from "@/lib/getUserByEmail"
+import { isOnboardingCompleted } from "@/lib/onboarding"
+import { isMissingProfileColumnError } from "@/lib/supabase/profileSchema"
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,19 +44,74 @@ export async function POST(request: NextRequest) {
         : "client"
 
     // For clients: ensure their profile row exists.
-    if (accountType === "client") {
-      const fullName = (user.user_metadata as { full_name?: string } | undefined)?.full_name || email.split("@")[0]
-
-      const { error: profileError } = await supabaseAdmin
-        .from("profiles")
-        .upsert({ id: user.id, full_name: fullName, role: "client" }, { onConflict: "id" })
-
-      if (profileError) {
-        console.error("[verify-email] Profile upsert failed:", profileError)
-      }
+    const fullName =
+      (user.user_metadata as { full_name?: string } | undefined)?.full_name || email.split("@")[0]
+    
+    const profileData: any = {
+      id: user.id,
+      full_name: fullName,
+      role: accountType,
+      is_verified: true,
+      verified_at: new Date().toISOString(),
     }
 
-    return NextResponse.json({ success: true, accountType, session: verifyData.session })
+    let { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .upsert(profileData, { onConflict: "id" })
+
+    if (profileError && isMissingProfileColumnError(profileError)) {
+      console.warn("[verify-email] Falling back to minimal profile upsert due to missing schema fields")
+      // Remove verification fields and retry
+      delete profileData.is_verified
+      delete profileData.verified_at
+      const { error: retryError } = await supabaseAdmin
+        .from("profiles")
+        .upsert(profileData, { onConflict: "id" })
+      profileError = retryError
+    }
+
+    if (profileError) {
+      console.error("[verify-email] Profile upsert failed:", profileError)
+    }
+
+    const metadataOnboardingCompleted =
+      ((user.user_metadata as { onboarding_completed?: unknown } | undefined)?.onboarding_completed) === true
+
+    let onboardingCompleted = metadataOnboardingCompleted
+    let trainerStatus: "pending" | "approved" | "rejected" | null = null
+
+    const { data: profileState, error: profileStateError } = await supabaseAdmin
+      .from("profiles")
+      .select("onboarding_completed, onboarding_details, trainer_status")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    if (profileStateError && !isMissingProfileColumnError(profileStateError)) {
+      console.error("[verify-email] Profile state query failed:", profileStateError)
+    }
+
+    if (profileStateError && isMissingProfileColumnError(profileStateError)) {
+      const { data: fallbackProfileState } = await supabaseAdmin
+        .from("profiles")
+        .select("trainer_status")
+        .eq("id", user.id)
+        .maybeSingle()
+      trainerStatus = (fallbackProfileState?.trainer_status as "pending" | "approved" | "rejected" | null | undefined) ?? null
+    } else {
+      onboardingCompleted =
+        onboardingCompleted ||
+        profileState?.onboarding_completed === true ||
+        isOnboardingCompleted(profileState)
+      trainerStatus = (profileState?.trainer_status as "pending" | "approved" | "rejected" | null | undefined) ?? null
+    }
+
+    return NextResponse.json({
+      success: true,
+      accountType,
+      session: verifyData.session,
+      onboardingCompleted,
+      trainerStatus,
+    })
   } catch (err) {
     console.error("Unexpected error in verify-email route:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -1,4 +1,4 @@
-export type UserRole = "student" | "client" | "trainer" | "admin"
+export type UserRole = "client" | "trainer" | "admin"
 export type TrainerStatus = "pending" | "approved" | "rejected"
 
 export type Profile = {
@@ -7,5 +7,10 @@ export type Profile = {
   avatar_url: string | null
   role: UserRole | null
   trainer_status: TrainerStatus | null
+  onboarding_completed: boolean
+  onboarding_completed_at: string | null
+  is_verified: boolean
+  verified_at: string | null
+  onboarding_details: Record<string, unknown> | null
   created_at: string | null
 }

@@ -3,16 +3,17 @@
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { Eye, EyeOff, Dumbbell, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Dumbbell, Eye, EyeOff, ArrowRight } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
-import { useAuth } from "@/components/auth/AuthProvider"
-import { getRoleRedirectPath, getTrainerStatus } from "@/lib/trainerAuth"
-import { createAdminSession } from "@/app/admin/actions"
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton"
+import { getUserProfile } from "@/lib/trainerAuth"
+import { getDashboardRouteForProfile } from "@/lib/rbac"
+import { useAuth } from "@/components/auth/AuthProvider"
+import { createAdminSession, clearAdminSession } from "@/app/admin/actions"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -28,8 +29,13 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isHandlingSubmit.current) return
-    if (!loading && session?.user) {
-      if (!session.user.email_confirmed_at) {
+    if (loading || !session?.user) return
+
+    const redirectFromState = async () => {
+      const profile = await getUserProfile(session.user.id)
+      const isVerified = profile?.is_verified === true || Boolean(session.user.email_confirmed_at)
+
+      if (!isVerified) {
         const accountType =
           (session.user.user_metadata as { account_type?: string } | undefined)
             ?.account_type === "trainer"
@@ -39,11 +45,34 @@ export default function LoginPage() {
         return
       }
 
-      getRoleRedirectPath(session.user.id).then((path) => {
-        if (isHandlingSubmit.current) return
-        router.replace(path)
-      })
+      if (isHandlingSubmit.current) return
+
+      const metadataOnboardingCompleted =
+        ((session.user.user_metadata as { onboarding_completed?: unknown } | undefined)?.onboarding_completed) === true
+
+      if (!profile?.onboarding_completed && !metadataOnboardingCompleted) {
+        router.replace("/onboarding")
+        return
+      }
+
+      const redirectPath = getDashboardRouteForProfile(profile)
+
+      // Prevent infinite loop if already on the correct path
+      if (window.location.pathname === redirectPath) return
+
+      if (redirectPath.startsWith("/admin")) {
+        const result = await createAdminSession(session.user.id)
+        if (result.error) {
+          await clearAdminSession()
+          router.replace("/dashboard")
+          return
+        }
+      } else {
+        await clearAdminSession()
+      }
+       router.replace(redirectPath)
     }
+    void redirectFromState()
   }, [loading, session, router])
 
   useEffect(() => {
@@ -90,52 +119,47 @@ export default function LoginPage() {
       return
     }
 
-    if (!data.user.email_confirmed_at) {
+    const profile = await getUserProfile(userId)
+    const isVerified = profile?.is_verified === true || Boolean(data.user.email_confirmed_at)
+
+    if (!isVerified) {
       const accountType =
         (data.user.user_metadata as { account_type?: string } | undefined)
           ?.account_type === "trainer"
           ? "trainer"
           : "client"
       setIsLoading(false)
-      await supabase.auth.signOut()
+
       router.replace(`/verify-email?email=${encodeURIComponent(email)}&type=${accountType}`)
       return
     }
 
-    const trainerStatus = await getTrainerStatus(userId)
-    if (trainerStatus === "pending") {
-      await supabase.auth.signOut()
-      router.replace("/trainer-pending")
+    const metadataOnboardingCompleted =
+      ((data.user.user_metadata as { onboarding_completed?: unknown } | undefined)?.onboarding_completed) === true
+
+    if (!profile?.onboarding_completed && !metadataOnboardingCompleted) {
+      setIsLoading(false)
+      router.replace("/onboarding")
       return
     }
 
-    if (trainerStatus === "rejected") {
-      await supabase.auth.signOut()
-      router.replace("/trainer-rejected")
-      return
-    }
-
-    const redirectPath = await getRoleRedirectPath(userId)
+    const redirectPath = getDashboardRouteForProfile(profile)
 
     // For admin users, establish the admin session cookie before redirecting.
     if (redirectPath.startsWith("/admin")) {
-      await createAdminSession(userId)
-    }
-
-    // Check onboarding completion for non-admin users.
-    if (!redirectPath.startsWith("/admin")) {
-      const onboardingCompleted =
-        (data.user.user_metadata as { onboarding_completed?: boolean } | undefined)
-          ?.onboarding_completed === true
-      if (!onboardingCompleted) {
+      const result = await createAdminSession(userId)
+      if (result.error) {
+        await clearAdminSession()
         setIsLoading(false)
-        router.replace("/onboarding")
+        router.replace("/dashboard")
         return
       }
+    } else {
+      await clearAdminSession()
     }
 
     setIsLoading(false)
-    router.replace(redirectPath)
+     router.replace(redirectPath)
   }
 
   if (loading) {

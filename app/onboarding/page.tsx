@@ -9,7 +9,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dumbbell, ArrowRight, CheckCircle2 } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 import { upsertClientGoals } from "@/lib/supabase/clientGoals"
-import { getRoleRedirectPath } from "@/lib/trainerAuth"
+import { isMissingProfileColumnError } from "@/lib/supabase/profileSchema"
+import { useAuth } from "@/components/auth/AuthProvider"
+import { getRoleRedirectPath, getUserProfile } from "@/lib/trainerAuth"
 
 const FITNESS_GOALS = ["Weight Loss", "Muscle Gain", "Flexibility", "Endurance", "General Fitness", "Sports Performance"]
 const EXPERIENCE_LEVELS = ["Beginner", "Intermediate", "Advanced"]
@@ -18,6 +20,7 @@ const SPECIALIZATIONS = ["Weight Training", "HIIT", "Yoga", "Pilates", "Boxing",
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const { user, loading, session } = useAuth()
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [accountType, setAccountType] = useState<"client" | "trainer">("client")
@@ -38,34 +41,34 @@ export default function OnboardingPage() {
   const [bio, setBio] = useState("")
 
   useEffect(() => {
+    if (loading) return
+
+    if (!user) {
+      router.replace("/login")
+      return
+    }
+
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.replace("/login")
-        return
-      }
-
-      // Skip onboarding if already completed
-      const onboardingCompleted =
-        (user.user_metadata as { onboarding_completed?: boolean } | undefined)
-          ?.onboarding_completed === true
+      const profile = await getUserProfile(user.id)
+      const metadataOnboardingCompleted =
+        ((user.user_metadata as { onboarding_completed?: unknown } | undefined)?.onboarding_completed) === true
+      const onboardingCompleted = profile?.onboarding_completed === true || metadataOnboardingCompleted
+      
       if (onboardingCompleted) {
         const redirectPath = await getRoleRedirectPath(user.id)
         router.replace(redirectPath)
         return
       }
 
-      const type =
+      const metadataType =
         (user.user_metadata as { account_type?: string } | undefined)?.account_type === "trainer"
-          ? "trainer"
-          : "client"
+      const type = profile?.role === "trainer" || metadataType ? "trainer" : "client"
       setAccountType(type)
       setIsLoading(false)
     }
 
     void init()
-  }, [router])
+  }, [loading, user, router])
 
   const toggleSpecialization = (spec: string) => {
     setSelectedSpecializations((prev) =>
@@ -79,21 +82,49 @@ export default function OnboardingPage() {
       return false
     }
 
-    // Ensure client profile exists
-    await supabase
-      .from("profiles")
-      .upsert({ id: userId, full_name: fullName, role: "client" }, { onConflict: "id" })
-
-    const { error: goalsError } = await upsertClientGoals(userId, {
+    const goalsPayload = {
       primary_goal: primaryGoal,
       experience_level: experienceLevel,
       preferred_training_style: trainingStyle,
       workout_days_per_week: workoutDays ? parseInt(workoutDays, 10) : null,
       notes: notes || null,
-    })
+    }
+
+    const { error: goalsError } = await upsertClientGoals(userId, goalsPayload)
 
     if (goalsError) {
       setError("Failed to save your preferences. Please try again.")
+      return false
+    }
+
+    const completedAt = new Date().toISOString()
+
+    const onboardingDetails = {
+      account_type: "client",
+      signup: {
+        full_name: fullName,
+        email,
+      },
+      client: goalsPayload,
+    }
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert(
+        {
+          id: userId,
+          full_name: fullName,
+          role: "client",
+          onboarding_completed: true,
+          onboarding_completed_at: completedAt,
+          onboarding_details: onboardingDetails,
+        },
+        { onConflict: "id" }
+      )
+
+    if (profileError) {
+      console.error("Client profile onboarding update failed:", profileError)
+      setError("Failed to update profile. Please try again.")
       return false
     }
 
@@ -150,6 +181,7 @@ export default function OnboardingPage() {
         user.email?.split("@")[0] ||
         "User"
       const email = user.email ?? ""
+      const completedAt = new Date().toISOString()
 
       let success = false
 
@@ -161,16 +193,14 @@ export default function OnboardingPage() {
 
       if (!success) return
 
-      // Mark onboarding as completed in user metadata
-      await supabase.auth.updateUser({
-        data: { onboarding_completed: true },
-      })
+      const existingMetadata = (user.user_metadata ?? {}) as Record<string, unknown>
+      const resOnboarding = await fetch("/api/auth/onboarding", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.id }) }); if (!resOnboarding.ok) { setError("Failed to save onboarding status. Please try again."); return; }
 
       if (accountType === "trainer") {
-        // Sign out trainer — they need admin approval before accessing the platform
-        await supabase.auth.signOut()
-        router.replace(`/verify-email?email=${encodeURIComponent(email)}&type=trainer`)
+        router.replace("/trainer-pending")
       } else {
+        // Force session refresh to pick up new metadata before redirecting
+        await supabase.auth.refreshSession()
         const redirectPath = await getRoleRedirectPath(user.id)
         router.replace(redirectPath)
       }
@@ -191,10 +221,10 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-8">
-      <div className="w-full max-w-xl space-y-8">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-xl space-y-8 bg-card p-8 rounded-2xl border border-border shadow-sm">
         {/* Logo */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 justify-center">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
             <Dumbbell className="h-5 w-5 text-primary-foreground" />
           </div>
@@ -202,11 +232,11 @@ export default function OnboardingPage() {
         </div>
 
         {/* Header */}
-        <div className="space-y-2">
+        <div className="space-y-2 text-center">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
             {accountType === "trainer" ? "Tell us about yourself" : "Personalize your experience"}
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-center mx-auto max-w-md">
             {accountType === "trainer"
               ? "Complete your trainer profile so we can review your application."
               : "Help us match you with the perfect trainer."}

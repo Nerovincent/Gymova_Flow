@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Suspense, useMemo, useState } from "react"
+import { Suspense, useMemo, useState, useEffect, useRef } from "react"
 import { ArrowLeft, ArrowRight, CheckCircle2, Dumbbell, Mail, RefreshCw } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 
@@ -22,6 +22,7 @@ function VerifyEmailContent() {
   const [resendLoading, setResendLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const hasSentInitialOtp = useRef(false)
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -54,12 +55,33 @@ function VerifyEmailContent() {
         await supabase.auth.setSession(json.session)
       }
 
+      const onboardingCompleted = json.onboardingCompleted === true
+      const trainerStatus = json.trainerStatus as "pending" | "approved" | "rejected" | null
+
+      if (!onboardingCompleted) {
+        setSuccess("Email verified! Redirecting to onboarding...")
+        router.replace("/onboarding")
+        return
+      }
+
       if (accountType === "trainer") {
+        if (trainerStatus === "rejected") {
+          setSuccess("Email verified. Redirecting to application status...")
+          router.replace("/trainer-rejected")
+          return
+        }
+
+        if (trainerStatus === "approved") {
+          setSuccess("Email verified. Redirecting to trainer dashboard...")
+          router.replace("/trainer")
+          return
+        }
+
         setSuccess("Email verified. Redirecting to application status...")
         router.replace("/trainer-pending")
       } else {
-        setSuccess("Email verified! Redirecting to onboarding...")
-        router.replace("/onboarding")
+        setSuccess("Email verified! Redirecting to dashboard...")
+        router.replace("/dashboard")
       }
     } catch {
       setError("Verification failed. Please try again.")
@@ -67,6 +89,13 @@ function VerifyEmailContent() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (email && !hasSentInitialOtp.current) {
+      hasSentInitialOtp.current = true
+      void handleResend()
+    }
+  }, [email])
 
   const handleResend = async () => {
     if (!email) {
