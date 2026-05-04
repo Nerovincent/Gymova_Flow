@@ -117,8 +117,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!user?.id) return
 
+    const channelName = `profile-${user.id}`
     const channel = supabase
-      .channel(`profile-${user.id}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -135,7 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .subscribe()
 
     return () => {
-      channel.unsubscribe()
+      supabase.removeChannel(channel)
     }
   }, [user?.id])
 
